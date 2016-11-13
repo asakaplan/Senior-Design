@@ -72,6 +72,11 @@
 #define FIFO_NAME "arsdk_fifo"
 
 #define IHM
+
+
+#define NUM_COMMANDS 2
+
+
 /*****************************************
  *
  *             private header:
@@ -96,6 +101,7 @@ FILE *videoOut = NULL;
 int frameNb = 0;
 ARSAL_Sem_t stateSem;
 int isBebop2 = 0;
+boolean stopCommand = false;
 
 static void signal_handler(int signal)
 {
@@ -150,11 +156,7 @@ int main (int argc, char *argv[])
 
     ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Select your Bebop : Bebop (1) ; Bebop2 (2)");
     char answer = '1';
-    scanf(" %c", &answer);
-    if (answer == '2')
-    {
-        isBebop2 = 1;
-    }
+    isBebop2 = 1;
 
     if(isBebop2)
     {
@@ -328,6 +330,24 @@ int main (int argc, char *argv[])
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "- error :%s", ARCONTROLLER_Error_ToString(error));
         }
     }
+    // Set settings like safety parameters
+    if (!failed)
+    {
+	//Tell the drone to return to start after 5 seconds of disconnect
+	deviceController->aRDrone3->sendGPSSettingsHomeType(deviceController->aRDrone3, ARCOMMANDS_ARDRONE3_GPSSETTINGS_HOMETYPE_TYPE_TAKEOFF);
+        deviceController->aRDrone3->sendGPSSettingsReturnHomeDelay(deviceController->aRDrone3, (uint16_t)2);
+	//Set boundary box and turn it on
+        deviceController->aRDrone3->sendPilotingSettingsMaxAltitude(deviceController->aRDrone3, (float)3);
+	deviceController->aRDrone3->sendPilotingSettingsMaxDistance(deviceController->aRDrone3, (float)3);
+	deviceController->aRDrone3->sendPilotingSettingsNoFlyOverMaxDistance(deviceController->aRDrone3, (uint8_t)1);
+        //Change type of stream to be best for gpu computations
+	deviceController->aRDrone3->sendMediaStreamingVideoStreamMode(deviceController->aRDrone3, ARCOMMANDS_ARDRONE3_MEDIASTREAMING_VIDEOSTREAMMODE_MODE_HIGH_RELIABILITY_LOW_FRAMERATE);
+        deviceController->aRDrone3->sendPictureSettingsVideoResolutions(deviceController->aRDrone3, ARCOMMANDS_ARDRONE3_PICTURESETTINGS_VIDEORESOLUTIONS_TYPE_REC720_STREAM720);
+
+
+
+    }
+
 
     // send the command that tells to the Bebop to begin its streaming
     if (!failed)
@@ -436,10 +456,12 @@ void stateChanged (eARCONTROLLER_DEVICE_STATE newState, eARCONTROLLER_ERROR erro
         break;
     }
 }
-
+boolean wasTakingOff = false;
+int counter1 = 0;
 // called when a command has been received from the drone
 void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICTIONARY_ELEMENT_t *elementDictionary, void *customData)
 {
+    
     ARCONTROLLER_Device_t *deviceController = customData;
 
     if (deviceController != NULL)
@@ -526,6 +548,77 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "elements is NULL");
         }
     }
+    if ((commandKey == ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND) && (elementDictionary != NULL))
+    {
+
+        //IHM_PrintInfoF(ihm, "CALLLBACKKKK  1 %d", counter1++);
+
+		//moveCommands(deviceController);
+        ARCONTROLLER_DICTIONARY_ARG_t *arg = NULL;
+        ARCONTROLLER_DICTIONARY_ELEMENT_t *element = NULL;
+        HASH_FIND_STR (elementDictionary, ARCONTROLLER_DICTIONARY_SINGLE_KEY, element);
+        if (element != NULL)
+        {
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND_DX, arg);
+            if (arg != NULL)
+            {
+                //float dX = arg->value.Float;
+            }
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND_DY, arg);
+            if (arg != NULL)
+            {
+                //float dY = arg->value.Float;
+            }
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND_DZ, arg);
+            if (arg != NULL)
+            {
+                //float dZ = arg->value.Float;
+            }
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND_DPSI, arg);
+            if (arg != NULL)
+            {
+                //float dPsi = arg->value.Float;
+            }
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR, arg);
+            if (arg != NULL)
+            {
+                eARCOMMANDS_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR error = arg->value.I32;
+            }
+        }
+    }
+    if ((commandKey == ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED) && (elementDictionary != NULL))
+    {
+       
+
+        //IHM_PrintInfoF(ihm, "CALLLBACKKKK 2  %d", counter1++);
+        ARCONTROLLER_DICTIONARY_ARG_t *arg = NULL;
+        ARCONTROLLER_DICTIONARY_ELEMENT_t *element = NULL;
+        HASH_FIND_STR (elementDictionary, ARCONTROLLER_DICTIONARY_SINGLE_KEY, element);
+        if (element != NULL)
+        {
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE, arg);
+            if (arg != NULL)
+            {
+                eARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE state = arg->value.I32;
+		if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_HOVERING){
+			moveCommands(deviceController);		
+		}
+        //IHM_PrintInfo(ihm, "The state changed to "+ state);
+		/*if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF ||
+state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
+	wasTakingOff = true;
+
+        //IHM_PrintInfo(ihm, "Set was taking off!");
+}
+		else if(wasTakingOff){
+
+        //qIHM_PrintInfo(ihm, "Was taking off!");
+			moveCommands(deviceController);
+wasTakingOff=false;
+		}*/
+            }
+        }
+    }
 }
 
 void batteryStateChanged (uint8_t percent)
@@ -602,12 +695,14 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
     switch (event)
     {
     case IHM_INPUT_EVENT_EXIT:
+	stopCommand = true;
         IHM_PrintInfo(ihm, "IHM_INPUT_EVENT_EXIT ...");
         gIHMRun = 0;
         break;
     case IHM_INPUT_EVENT_EMERGENCY:
         if(deviceController != NULL)
         {
+	    stopCommand = true;
             // send a Emergency command to the drone
             error = deviceController->aRDrone3->sendPilotingEmergency(deviceController->aRDrone3);
         }
@@ -615,14 +710,16 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
     case IHM_INPUT_EVENT_LAND:
         if(deviceController != NULL)
         {
-            // send a takeoff command to the drone
+	    stopCommand = true;
+            // send a landing command to the drone
             error = deviceController->aRDrone3->sendPilotingLanding(deviceController->aRDrone3);
         }
         break;
     case IHM_INPUT_EVENT_TAKEOFF:
         if(deviceController != NULL)
         {
-            // send a landing command to the drone
+	    stopCommand = false;
+            // send a takeoff command to the drone
             error = deviceController->aRDrone3->sendPilotingTakeOff(deviceController->aRDrone3);
         }
         break;
@@ -642,40 +739,40 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
     case IHM_INPUT_EVENT_RIGHT:
         if(deviceController != NULL)
         {
-            error = deviceController->aRDrone3->setPilotingPCMDYaw(deviceController->aRDrone3, 50);
+            error = deviceController->aRDrone3->setPilotingPCMDYaw(deviceController->aRDrone3, 100);
         }
         break;
     case IHM_INPUT_EVENT_LEFT:
         if(deviceController != NULL)
         {
-            error = deviceController->aRDrone3->setPilotingPCMDYaw(deviceController->aRDrone3, -50);
+            error = deviceController->aRDrone3->setPilotingPCMDYaw(deviceController->aRDrone3, -100);
         }
         break;
     case IHM_INPUT_EVENT_FORWARD:
         if(deviceController != NULL)
         {
-            error = deviceController->aRDrone3->setPilotingPCMDPitch(deviceController->aRDrone3, 50);
+            error = deviceController->aRDrone3->setPilotingPCMDPitch(deviceController->aRDrone3, 70);
             error = deviceController->aRDrone3->setPilotingPCMDFlag(deviceController->aRDrone3, 1);
         }
         break;
     case IHM_INPUT_EVENT_BACK:
         if(deviceController != NULL)
         {
-            error = deviceController->aRDrone3->setPilotingPCMDPitch(deviceController->aRDrone3, -50);
+            error = deviceController->aRDrone3->setPilotingPCMDPitch(deviceController->aRDrone3, -70);
             error = deviceController->aRDrone3->setPilotingPCMDFlag(deviceController->aRDrone3, 1);
         }
         break;
     case IHM_INPUT_EVENT_ROLL_LEFT:
         if(deviceController != NULL)
         {
-            error = deviceController->aRDrone3->setPilotingPCMDRoll(deviceController->aRDrone3, -50);
+            error = deviceController->aRDrone3->setPilotingPCMDRoll(deviceController->aRDrone3, -70);
             error = deviceController->aRDrone3->setPilotingPCMDFlag(deviceController->aRDrone3, 1);
         }
         break;
     case IHM_INPUT_EVENT_ROLL_RIGHT:
         if(deviceController != NULL)
         {
-            error = deviceController->aRDrone3->setPilotingPCMDRoll(deviceController->aRDrone3, 50);
+            error = deviceController->aRDrone3->setPilotingPCMDRoll(deviceController->aRDrone3, 70);
             error = deviceController->aRDrone3->setPilotingPCMDFlag(deviceController->aRDrone3, 1);
         }
         break;
@@ -695,7 +792,17 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
         IHM_PrintInfo(ihm, "Error sending an event");
     }
 }
+int pos = 0;
+float commands[NUM_COMMANDS][4] = {{0.0f,0.0f,0.0f,1.5708f},{0.0f,0.0f,0.0f,1.5708f}};//,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
+void moveCommands(ARCONTROLLER_Device_t *deviceController)
+{
 
+    IHM_PrintInfoF(ihm, "In moveCommands %d", pos++);
+    if(!stopCommand){
+        deviceController->aRDrone3->sendPilotingMoveBy(deviceController->aRDrone3, commands[pos%NUM_COMMANDS][0], commands[pos%NUM_COMMANDS][1], commands[pos%NUM_COMMANDS][2],commands[pos%NUM_COMMANDS][3]);
+        pos++;
+    }
+}
 int customPrintCallback (eARSAL_PRINT_LEVEL level, const char *tag, const char *format, va_list va)
 {
     // Custom callback used when ncurses is runing for not disturb the IHM

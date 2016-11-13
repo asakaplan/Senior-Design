@@ -53,4 +53,6 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData);
 
 int customPrintCallback (eARSAL_PRINT_LEVEL level, const char *tag, const char *format, va_list va);
 
+void moveCommands(ARCONTROLLER_Device_t *deviceController);
+
 #endif /* _JUMPINGSUMO_PILOTING_H_ */

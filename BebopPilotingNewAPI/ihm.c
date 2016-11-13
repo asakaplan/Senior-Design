@@ -182,11 +182,11 @@ void *IHM_InputProcessing(void *data)
         while (ihm->run)
         {
 
-            key = curPlace<4?'t':commands[(curPlace-1)%arrayLen];//getch();
-	    int keyTemp = getch();
+            key = getch();/*curPlace<4?'t':*/commands[(curPlace-1)%arrayLen];//getch();
+	    /*int keyTemp = getch();
 	    if((keyTemp == ' ') || (keyTemp == 'q') || (keyTemp == 'e')){
             	key = keyTemp;
-            }
+            }*/
 	    curPlace++;
             int row,col;				/* to store the number of rows and *
 						/* start the curses mode */
@@ -287,7 +287,7 @@ void *IHM_InputProcessing(void *data)
                 }
             }
             
-            usleep(1000000);
+            usleep(10);
         }
     }
     
@@ -313,7 +313,15 @@ void IHM_PrintInfo(IHM_t *ihm, char *infoStr)
         mvprintw(INFO_Y, INFO_X, infoStr);
     }
 }
-
+void IHM_PrintInfoF(IHM_t *ihm, char *infoStr, int info)
+{
+    if (ihm != NULL)
+    {
+        move(INFO_Y, 0);    // move to begining of line
+        clrtoeol();         // clear line
+        mvprintw(INFO_Y, INFO_X, infoStr, info);
+    }
+}
 void IHM_PrintBattery(IHM_t *ihm, uint8_t percent)
 {
     if (ihm != NULL)
