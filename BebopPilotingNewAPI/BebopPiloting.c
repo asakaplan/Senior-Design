@@ -44,8 +44,8 @@
 #include <curses.h>
 #include <string.h>
 #include <unistd.h>
-#include <signal.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <libARSAL/ARSAL.h>
 #include <libARController/ARController.h>
@@ -53,6 +53,7 @@
 
 #include "BebopPiloting.h"
 #include "ihm.h"
+#include <libssh/libssh.h> 
 
 /*****************************************
  *
@@ -155,8 +156,7 @@ int main (int argc, char *argv[])
     ARSAL_Sem_Init (&(stateSem), 0, 0);
 
     ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Select your Bebop : Bebop (1) ; Bebop2 (2)");
-    char answer = '1';
-    isBebop2 = 1;
+    isBebop2 = 0;
 
     if(isBebop2)
     {
@@ -551,9 +551,8 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
     if ((commandKey == ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND) && (elementDictionary != NULL))
     {
 
-        //IHM_PrintInfoF(ihm, "CALLLBACKKKK  1 %d", counter1++);
+        IHM_PrintInfoF(ihm, "CALLLBACKKKK  1 %d", counter1++);
 
-		//moveCommands(deviceController);
         ARCONTROLLER_DICTIONARY_ARG_t *arg = NULL;
         ARCONTROLLER_DICTIONARY_ELEMENT_t *element = NULL;
         HASH_FIND_STR (elementDictionary, ARCONTROLLER_DICTIONARY_SINGLE_KEY, element);
@@ -582,7 +581,8 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
             HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR, arg);
             if (arg != NULL)
             {
-                eARCOMMANDS_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR error = arg->value.I32;
+		moveCommands(deviceController);
+                //eARCOMMANDS_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR error = arg->value.I32;
             }
         }
     }
@@ -601,21 +601,17 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
             {
                 eARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE state = arg->value.I32;
 		if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_HOVERING){
-			moveCommands(deviceController);		
+			//moveCommands(deviceController);
+			//moveCommands(deviceController);		
 		}
-        //IHM_PrintInfo(ihm, "The state changed to "+ state);
-		/*if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF ||
-state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
-	wasTakingOff = true;
-
-        //IHM_PrintInfo(ihm, "Set was taking off!");
-}
+        	//IHM_PrintInfo(ihm, "The state changed to "+ state);
+		if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF || state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
+			wasTakingOff = true;
+		}
 		else if(wasTakingOff){
-
-        //qIHM_PrintInfo(ihm, "Was taking off!");
 			moveCommands(deviceController);
-wasTakingOff=false;
-		}*/
+			wasTakingOff=false;
+		}
             }
         }
     }
