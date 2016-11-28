@@ -60,8 +60,13 @@
 #define INFO_X 0
 #define INFO_Y 2
 
+#define VELOCITY_X 0
+#define VELOCITY_Y 4
+
 #define BATTERY_X 0
-#define BATTERY_Y 4
+#define BATTERY_Y 8
+
+
 
 /*****************************************
  *
@@ -171,8 +176,8 @@ void IHM_setCustomData(IHM_t *ihm, void *customData)
 
 void *IHM_InputProcessing(void *data)
 {
-    int commands[] = {KEY_UP, KEY_LEFT, KEY_LEFT, KEY_LEFT, KEY_DOWN, KEY_RIGHT, KEY_RIGHT, KEY_RIGHT};
-    int arrayLen = 4;
+    //int commands[] = {KEY_UP, KEY_LEFT, KEY_LEFT, KEY_LEFT, KEY_DOWN, KEY_RIGHT, KEY_RIGHT, KEY_RIGHT};
+    //int arrayLen = 4;
 
     IHM_t *ihm = (IHM_t *) data;
     int key = 0;
@@ -182,13 +187,13 @@ void *IHM_InputProcessing(void *data)
         while (ihm->run)
         {
 
-            key = getch();/*curPlace<4?'t':*/commands[(curPlace-1)%arrayLen];//getch();
+            key = getch();/*curPlace<4?'t':commands[(curPlace-1)%arrayLen];//getch();*/
 	    /*int keyTemp = getch();
 	    if((keyTemp == ' ') || (keyTemp == 'q') || (keyTemp == 'e')){
             	key = keyTemp;
             }*/
 	    curPlace++;
-            int row,col;				/* to store the number of rows and *
+            int row,col;				/* to store the number of rows and */
 						/* start the curses mode */
             getmaxyx(stdscr,row,col);		/* get the number of rows and columns */
             mvprintw(row/2,(col-2)/2,"%d",key);
@@ -329,6 +334,16 @@ void IHM_PrintInfoF2(IHM_t *ihm, char *infoStr, int info1, int info2)
         move(INFO_Y, 0);    // move to begining of line
         clrtoeol();         // clear line
         mvprintw(INFO_Y, INFO_X, infoStr, info1, info2);
+    }
+}
+
+void IHM_PrintVelocity(IHM_t *ihm, float vX, float vY, float vZ, bool stopped, bool wasMoving, int num)
+{
+    if (ihm != NULL)
+    {
+        move(VELOCITY_Y, 0);    // move to begining of line
+        clrtoeol();         // clear line
+        mvprintw(VELOCITY_Y, VELOCITY_X, "Velocity: %.6f, %.6f, %.6f\n Stopped: %s\n Was Moving:%s %d", vX, vY, vZ, stopped?"true":"false", wasMoving?"true":"false", num);
     }
 }
 void IHM_PrintBattery(IHM_t *ihm, uint8_t percent)
