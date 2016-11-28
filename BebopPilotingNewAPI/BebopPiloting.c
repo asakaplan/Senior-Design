@@ -338,7 +338,7 @@ int main (int argc, char *argv[])
         deviceController->aRDrone3->sendGPSSettingsReturnHomeDelay(deviceController->aRDrone3, (uint16_t)2);
 	//Set boundary box and turn it on
         deviceController->aRDrone3->sendPilotingSettingsMaxAltitude(deviceController->aRDrone3, (float)3);
-	deviceController->aRDrone3->sendPilotingSettingsMaxDistance(deviceController->aRDrone3, (float)3);
+	deviceController->aRDrone3->sendPilotingSettingsMaxDistance(deviceController->aRDrone3, (float)10);
 	deviceController->aRDrone3->sendPilotingSettingsNoFlyOverMaxDistance(deviceController->aRDrone3, (uint8_t)1);
         //Change type of stream to be best for gpu computations
 	deviceController->aRDrone3->sendMediaStreamingVideoStreamMode(deviceController->aRDrone3, ARCOMMANDS_ARDRONE3_MEDIASTREAMING_VIDEOSTREAMMODE_MODE_HIGH_RELIABILITY_LOW_FRAMERATE);
@@ -457,6 +457,7 @@ void stateChanged (eARCONTROLLER_DEVICE_STATE newState, eARCONTROLLER_ERROR erro
     }
 }
 boolean wasTakingOff = false;
+boolean wasMoving = false;
 int counter1 = 0;
 // called when a command has been received from the drone
 void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICTIONARY_ELEMENT_t *elementDictionary, void *customData)
@@ -581,7 +582,7 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
             HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR, arg);
             if (arg != NULL)
             {
-		moveCommands(deviceController);
+		//moveCommands(deviceController);
                 //eARCOMMANDS_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR error = arg->value.I32;
             }
         }
@@ -613,6 +614,43 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
 			wasTakingOff=false;
 		}
             }
+        }
+    }
+float epsilon = .001f;
+if ((commandKey == ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGSTATE_SPEEDCHANGED) && (elementDictionary != NULL))
+    {
+        ARCONTROLLER_DICTIONARY_ARG_t *arg = NULL;
+        ARCONTROLLER_DICTIONARY_ELEMENT_t *element = NULL;
+        HASH_FIND_STR (elementDictionary, ARCONTROLLER_DICTIONARY_SINGLE_KEY, element);
+        if (element != NULL)
+        {
+	    bool stopped = true;
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGSTATE_SPEEDCHANGED_SPEEDX, arg);
+            if (arg != NULL)
+            {
+                float speedX = arg->value.Float;
+		stopped &= abs(speedX) < epsilon;
+            }
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGSTATE_SPEEDCHANGED_SPEEDY, arg);
+            if (arg != NULL)
+            {
+                float speedY = arg->value.Float;
+		stopped &= abs(speedY) < epsilon;
+            }
+            HASH_FIND_STR (element->arguments, ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGSTATE_SPEEDCHANGED_SPEEDZ, arg);
+            if (arg != NULL)
+            {
+                float speedZ = arg->value.Float;
+		stopped &= abs(speedZ) < epsilon;
+            }
+
+    IHM_PrintInfoF2(ihm, "Stopped %d, Was moving %d", stopped, wasMoving);
+	    if (stopped && wasMoving && !stopCommand) 
+	    {
+		moveCommands(deviceController);	
+wasMoving = false;	    }
+if(!stopped && !stopCommand){
+wasMoving = true;}
         }
     }
 }
@@ -789,11 +827,11 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
     }
 }
 int pos = 0;
-float commands[NUM_COMMANDS][4] = {{0.0f,0.0f,0.0f,1.5708f},{0.0f,0.0f,0.0f,1.5708f}};//,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
+float commands[NUM_COMMANDS][4] = {{1.0f,0.0f,0.0f,0.0f},{-1.0f,0.0f,0.0f,0.0f}};//,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
 void moveCommands(ARCONTROLLER_Device_t *deviceController)
 {
 
-    IHM_PrintInfoF(ihm, "In moveCommands %d", pos++);
+    IHM_PrintInfoF(ihm, "In moveCommands %d", pos + 1);
     if(!stopCommand){
         deviceController->aRDrone3->sendPilotingMoveBy(deviceController->aRDrone3, commands[pos%NUM_COMMANDS][0], commands[pos%NUM_COMMANDS][1], commands[pos%NUM_COMMANDS][2],commands[pos%NUM_COMMANDS][3]);
         pos++;

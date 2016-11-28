@@ -71,6 +71,7 @@ void IHM_setCustomData(IHM_t *ihm, void *customData);
 void IHM_PrintHeader(IHM_t *ihm, char *headerStr);
 void IHM_PrintInfo(IHM_t *ihm, char *infoStr);
 void IHM_PrintInfoF(IHM_t *ihm, char *infoStr, int info);
+void IHM_PrintInfoF2(IHM_t *ihm, char *infoStr, int info1 ,int info2);
 void IHM_PrintBattery(IHM_t *ihm, uint8_t percent);
 
 #endif /* _BEBOP_PILOTING_IHM_H_ */

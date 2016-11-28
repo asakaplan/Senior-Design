@@ -322,6 +322,15 @@ void IHM_PrintInfoF(IHM_t *ihm, char *infoStr, int info)
         mvprintw(INFO_Y, INFO_X, infoStr, info);
     }
 }
+void IHM_PrintInfoF2(IHM_t *ihm, char *infoStr, int info1, int info2)
+{
+    if (ihm != NULL)
+    {
+        move(INFO_Y, 0);    // move to begining of line
+        clrtoeol();         // clear line
+        mvprintw(INFO_Y, INFO_X, infoStr, info1, info2);
+    }
+}
 void IHM_PrintBattery(IHM_t *ihm, uint8_t percent)
 {
     if (ihm != NULL)
