@@ -47,6 +47,9 @@
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <netdb.h> 
 
 #include <sys/socket.h>
 
@@ -79,6 +82,7 @@
 
 #define NUM_COMMANDS 4
 #define SPEED_BUFFER_SIZE 5
+#define SOCKET_BUFFER_SIZE 262144
 
 
 /*****************************************
@@ -93,7 +97,7 @@
  *             implementation :
  *
  *****************************************/
-
+//original
 static char fifo_dir[] = FIFO_DIR_PATTERN;
 static char fifo_name[128] = "";
 
@@ -106,6 +110,13 @@ int frameNb = 0;
 ARSAL_Sem_t stateSem;
 int isBebop2 = 0;
 boolean stopCommand = false;
+int sockfd;
+struct sockaddr_in serv_addr;
+struct hostent *server;
+char bufferRead[SOCKET_BUFFER_SIZE];
+char bufferWrite[SOCKET_BUFFER_SIZE];
+char* ipAddress = "127.0.0.1";
+int port = 8000;
 
 static void signal_handler(int signal)
 {
@@ -120,7 +131,7 @@ int main (int argc, char *argv[])
     ARCONTROLLER_Device_t *deviceController = NULL;
     eARCONTROLLER_ERROR error = ARCONTROLLER_OK;
     eARCONTROLLER_DEVICE_STATE deviceState = ARCONTROLLER_DEVICE_STATE_MAX;
-    pid_t child = 0;
+    pid_t child = 0;	
 
     /* Set signal handlers */
     struct sigaction sig_action = {
@@ -351,6 +362,13 @@ int main (int argc, char *argv[])
 
     }
 
+    pid_t childSocket = 0;
+    if (!failed && (childSocket = fork())==0)
+    {
+	
+	setupSocket();
+	listenSocket();
+    }
 
     // send the command that tells to the Bebop to begin its streaming
     if (!failed)
@@ -426,9 +444,59 @@ int main (int argc, char *argv[])
     unlink(fifo_name);
     rmdir(fifo_dir);
 
+
+    close(sockfd);
     ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "-- END --");
 
     return EXIT_SUCCESS;
+}
+
+void setupSocket()
+{
+	printf("Opening socket");
+    int portno = 0;
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) 
+
+                        printf("ERROR opening socket");
+    server = gethostbyname(ipAddress);
+    if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        exit(0);
+    }
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr, 
+         (char *)&serv_addr.sin_addr.s_addr,
+         server->h_length);
+    serv_addr.sin_port = htons(portno);
+    if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
+                        printf("ERROR connecting");
+
+}
+int numWrites = 0;
+void writeSocket(uint8_t* data, int length){
+	printf("Writing %d", numWrites++);
+	int n = -1;
+    	n = write(sockfd,data, length);
+    	if (n < 0) 
+                        printf("ERROR writing to socket");
+}
+		
+void listenSocket()
+{
+	int count = 0;
+	while(1) {
+    		bzero(bufferRead,256);
+    		int n = read(sockfd,bufferRead,SOCKET_BUFFER_SIZE-1);
+    		if (n < 0) 
+                       printf("ERROR reading from socket");
+		else{
+		printf("Listening %d", count++);
+			fwrite(bufferRead, n, 1, videoOut);
+                	fflush (videoOut);
+		}
+	}
 }
 
 /*****************************************
