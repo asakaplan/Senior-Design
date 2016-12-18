@@ -5,7 +5,7 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_CATEGORY_PATH := samples
-LOCAL_MODULE := BebopPilotingNewAPI
+LOCAL_MODULE := BebopSample
 LOCAL_DESCRIPTION := Bebop Piloting Using ARDeviceController
 
 LOCAL_LIBRARIES := \
