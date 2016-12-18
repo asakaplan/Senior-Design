@@ -39,7 +39,6 @@
  *             include file :
  *
  *****************************************/
-
 #include <stdlib.h>
 #include <curses.h>
 #include <string.h>
@@ -59,6 +58,7 @@
 
 #include "BebopPiloting.h"
 #include "ihm.h"
+
 
 /*****************************************
  *
@@ -80,7 +80,7 @@
 #define IHM
 
 
-#define NUM_COMMANDS 4
+#define NUM_COMMANDS 2
 #define SPEED_BUFFER_SIZE 5
 #define SOCKET_BUFFER_SIZE 262144
 
@@ -97,7 +97,7 @@
  *             implementation :
  *
  *****************************************/
-//original
+
 static char fifo_dir[] = FIFO_DIR_PATTERN;
 static char fifo_name[128] = "";
 
@@ -109,12 +109,12 @@ FILE *videoOut = NULL;
 int frameNb = 0;
 ARSAL_Sem_t stateSem;
 int isBebop2 = 0;
-boolean stopCommand = false;
 int sockfd;
 struct sockaddr_in serv_addr;
 struct hostent *server;
 char bufferRead[SOCKET_BUFFER_SIZE];
 char bufferWrite[SOCKET_BUFFER_SIZE];
+boolean stopCommand = false;
 char* ipAddress = "127.0.0.1";
 int port = 8000;
 
@@ -131,7 +131,7 @@ int main (int argc, char *argv[])
     ARCONTROLLER_Device_t *deviceController = NULL;
     eARCONTROLLER_ERROR error = ARCONTROLLER_OK;
     eARCONTROLLER_DEVICE_STATE deviceState = ARCONTROLLER_DEVICE_STATE_MAX;
-    pid_t child = 0;	
+    pid_t child = 0;
 
     /* Set signal handlers */
     struct sigaction sig_action = {
@@ -186,7 +186,7 @@ int main (int argc, char *argv[])
         if (DISPLAY_WITH_MPLAYER)
         {
             // fork the process to launch mplayer
-            if ((child = fork()) == 0)
+            if ( (child = fork()) == 0)
             {
                 execlp("xterm", "xterm", "-e", "mplayer", "-demuxer",  "h264es", fifo_name, "-benchmark", "-really-quiet", NULL);
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Missing mplayer, you will not see the video. Please install mplayer and xterm.");
@@ -361,7 +361,6 @@ int main (int argc, char *argv[])
 
 
     }
-
     pid_t childSocket = 0;
     if (!failed && (childSocket = fork())==0)
     {
@@ -369,6 +368,7 @@ int main (int argc, char *argv[])
 	setupSocket();
 	listenSocket();
     }
+
 
     // send the command that tells to the Bebop to begin its streaming
     if (!failed)
@@ -444,8 +444,6 @@ int main (int argc, char *argv[])
     unlink(fifo_name);
     rmdir(fifo_dir);
 
-
-    close(sockfd);
     ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "-- END --");
 
     return EXIT_SUCCESS;
@@ -457,8 +455,7 @@ void setupSocket()
     int portno = 0;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) 
-
-                        printf("ERROR opening socket");
+	printf("ERROR opening socket");
     server = gethostbyname(ipAddress);
     if (server == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
@@ -474,13 +471,11 @@ void setupSocket()
                         printf("ERROR connecting");
 
 }
-int numWrites = 0;
+
 void writeSocket(uint8_t* data, int length){
-	printf("Writing %d", numWrites++);
-	int n = -1;
-    	n = write(sockfd,data, length);
+    	int n = write(sockfd,data, length);
     	if (n < 0) 
-                        printf("ERROR writing to socket");
+        	printf("ERROR writing to socket");
 }
 		
 void listenSocket()
@@ -489,8 +484,9 @@ void listenSocket()
 	while(1) {
     		bzero(bufferRead,256);
     		int n = read(sockfd,bufferRead,SOCKET_BUFFER_SIZE-1);
-    		if (n < 0) 
-                       printf("ERROR reading from socket");
+    		if (n < 0) {
+                       //printf("ERROR reading from socket");
+		}
 		else{
 		printf("Listening %d", count++);
 			fwrite(bufferRead, n, 1, videoOut);
@@ -498,7 +494,6 @@ void listenSocket()
 		}
 	}
 }
-
 /*****************************************
  *
  *             private implementation:
@@ -762,10 +757,8 @@ eARCONTROLLER_ERROR decoderConfigCallback (ARCONTROLLER_Stream_Codec_t codec, vo
         {
             if (DISPLAY_WITH_MPLAYER)
             {
-                fwrite(codec.parameters.h264parameters.spsBuffer, codec.parameters.h264parameters.spsSize, 1, videoOut);
-                fwrite(codec.parameters.h264parameters.ppsBuffer, codec.parameters.h264parameters.ppsSize, 1, videoOut);
-
-                fflush (videoOut);
+		writeSocket(codec.parameters.h264parameters.spsBuffer, codec.parameters.h264parameters.spsSize);
+		writeSocket(codec.parameters.h264parameters.ppsBuffer, codec.parameters.h264parameters.ppsSize);
             }
         }
 
@@ -787,9 +780,7 @@ eARCONTROLLER_ERROR didReceiveFrameCallback (ARCONTROLLER_Frame_t *frame, void *
         {
             if (DISPLAY_WITH_MPLAYER)
             {
-                fwrite(frame->data, frame->used, 1, videoOut);
-
-                fflush (videoOut);
+		writeSocket(frame->data, frame->used);
             }
         }
         else
@@ -915,7 +906,7 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
     }
 }
 int pos = 0;
-float commands[NUM_COMMANDS][4] = {{0.0f,1.0f,0.0f,0.0f},{-1.0f,0.0f,0.0f,0.0f},{0.0f,-1.0f,0.0f,0.0f},{1.0f,0.0f,0.0f,0.0f}};//,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
+float commands[NUM_COMMANDS][4] = {{0.0f,0.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,0.0f}};//,{0.0f,1.0f,0.0f,0.0f},{0.0f,0.0f,0.0f,1.0f}};,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
 void moveCommands(ARCONTROLLER_Device_t *deviceController)
 {
 
