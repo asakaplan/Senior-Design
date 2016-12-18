@@ -1,0 +1,1 @@
+sudo apt-get install build-essential autoconf libtool libavahi-client-dev libavcodec-dev libavformat-dev libswscale-dev libncurses5-dev mplayer libssh-dev

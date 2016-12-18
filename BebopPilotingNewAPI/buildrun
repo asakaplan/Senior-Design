@@ -1,0 +1,2 @@
+./../../../../build.sh -p arsdk-native -t build-sample-BebopPilotingNewAPI -j
+./../../../../out/arsdk-native/staging/native-wrapper.sh BebopPilotingNewAPI
