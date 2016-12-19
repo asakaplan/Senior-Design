@@ -66,6 +66,9 @@
 #define BATTERY_X 0
 #define BATTERY_Y 8
 
+#define BUFFER_X 0
+#define BUFFER_Y 18
+
 
 
 /*****************************************
@@ -336,7 +339,24 @@ void IHM_PrintInfoF2(IHM_t *ihm, char *infoStr, int info1, int info2)
         mvprintw(INFO_Y, INFO_X, infoStr, info1, info2);
     }
 }
-
+void IHM_PrintInfoXY2(IHM_t *ihm, int x, int y,char *infoStr,  int info1, int info2)
+{
+    if (ihm != NULL && 0)
+    {
+        move(y, 0);    // move to begining of line
+        clrtoeol();         // clear line
+        mvprintw(y, x, infoStr, info1, info2);
+    }
+}
+void IHM_PrintInfoXY2s(IHM_t *ihm, int x, int y,char *infoStr,  int info1, char* info2)
+{
+    if (ihm != NULL && 0)
+    {
+        move(y, 0);    // move to begining of line
+        clrtoeol();         // clear line
+        mvprintw(y, x, infoStr, info1, info2);
+    }
+}
 void IHM_PrintVelocity(IHM_t *ihm, float vX, float vY, float vZ, bool stopped, bool wasMoving, int num)
 {
     if (ihm != NULL)
@@ -356,5 +376,22 @@ void IHM_PrintBattery(IHM_t *ihm, uint8_t percent)
     }
 }
 
-
+void IHM_PrintBufferSize(IHM_t *ihm, int buf)
+{
+    if (ihm != NULL)
+    {
+        move(BUFFER_Y, 0);     // move to begining of line
+        clrtoeol();             // clear line
+        mvprintw(BUFFER_Y, BUFFER_X, "Buffer: %d", buf);
+    }
+}
+void IHM_PrintBuffer(IHM_t *ihm, char* buf)
+{
+    if (ihm != NULL)
+    {
+        move(BUFFER_Y, 0);     // move to begining of line
+        clrtoeol();             // clear line
+        mvprintw(BUFFER_Y, BUFFER_X, "Buffer: %s", buf);
+    }
+}
 

@@ -74,5 +74,8 @@ void IHM_PrintInfoF(IHM_t *ihm, char *infoStr, int info);
 void IHM_PrintInfoF2(IHM_t *ihm, char *infoStr, int info1 ,int info2);
 void IHM_PrintVelocity(IHM_t *ihm, float vX, float vY, float vZ, bool stopped, bool wasMoving, int num);
 void IHM_PrintBattery(IHM_t *ihm, uint8_t percent);
-
+void IHM_PrintInfoXY2(IHM_t *ihm, int x, int y,  char *infoStr, int info1, int info2);
+void IHM_PrintInfoXY2s(IHM_t *ihm, int x, int y,char *infoStr,  int info1, char* info2);
+void IHM_PrintBuffer(IHM_t *ihm, char* buf);
+void IHM_PrintBufferSize(IHM_t *ihm, int buf);
 #endif /* _BEBOP_PILOTING_IHM_H_ */

@@ -45,8 +45,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <math.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <netdb.h> 
 
@@ -82,7 +84,7 @@
 
 #define NUM_COMMANDS 2
 #define SPEED_BUFFER_SIZE 5
-#define SOCKET_BUFFER_SIZE 262144
+#define SOCKET_BUFFER_SIZE 32768
 
 
 /*****************************************
@@ -109,11 +111,9 @@ FILE *videoOut = NULL;
 int frameNb = 0;
 ARSAL_Sem_t stateSem;
 int isBebop2 = 0;
-int sockfd;
-struct sockaddr_in serv_addr;
-struct hostent *server;
-char bufferRead[SOCKET_BUFFER_SIZE];
-char bufferWrite[SOCKET_BUFFER_SIZE];
+int sockfd=0;
+char bufferRead[SOCKET_BUFFER_SIZE] = {0};
+char bufferWrite[SOCKET_BUFFER_SIZE] = {0};
 boolean stopCommand = false;
 char* ipAddress = "127.0.0.1";
 int port = 8000;
@@ -191,7 +191,7 @@ int main (int argc, char *argv[])
                 execlp("xterm", "xterm", "-e", "mplayer", "-demuxer",  "h264es", fifo_name, "-benchmark", "-really-quiet", NULL);
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Missing mplayer, you will not see the video. Please install mplayer and xterm.");
                 return -1;
-            }
+            }	
         }
 
         if (DISPLAY_WITH_MPLAYER)
@@ -303,7 +303,6 @@ int main (int argc, char *argv[])
             failed = 1;
         }
     }
-
     // add the frame received callback to be informed when a streaming frame has been received from the device
     if (!failed)
     {
@@ -313,7 +312,7 @@ int main (int argc, char *argv[])
         if (error != ARCONTROLLER_OK)
         {
             failed = 1;
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "- error :%", ARCONTROLLER_Error_ToString(error));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "- error :%s", ARCONTROLLER_Error_ToString(error));
         }
     }
 
@@ -329,7 +328,6 @@ int main (int argc, char *argv[])
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "- error :%s", ARCONTROLLER_Error_ToString(error));
         }
     }
-
     if (!failed)
     {
         // wait state update update
@@ -361,18 +359,19 @@ int main (int argc, char *argv[])
 
 
     }
-    pid_t childSocket = 0;
-    if (!failed && (childSocket = fork())==0)
+    if (!failed)
     {
 	
 	setupSocket();
-	listenSocket();
+	pthread_t thread;
+	int result_code = pthread_create(&thread, NULL, listenSocket, (void*)"TEST");
+    	assert( !result_code );
     }
 
 
     // send the command that tells to the Bebop to begin its streaming
     if (!failed)
-    {
+    {		
         ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "- send StreamingVideoEnable ... ");
         error = deviceController->aRDrone3->sendMediaStreamingVideoEnable (deviceController->aRDrone3, 1);
         if (error != ARCONTROLLER_OK)
@@ -426,7 +425,7 @@ int main (int argc, char *argv[])
         IHM_PrintInfo(ihm, "");
         ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "ARCONTROLLER_Device_Delete ...");
         ARCONTROLLER_Device_Delete (&deviceController);
-
+	shutdown(sockfd, 2);
         if (DISPLAY_WITH_MPLAYER)
         {
             fflush (videoOut);
@@ -451,15 +450,17 @@ int main (int argc, char *argv[])
 
 void setupSocket()
 {
-	printf("Opening socket");
-    int portno = 0;
+    int portno;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    portno = 8000;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) 
-	printf("ERROR opening socket");
-    server = gethostbyname(ipAddress);
+        IHM_PrintInfoXY2(ihm, 14, 0, "ERROR opening socket", 0, 0);
+    server = gethostbyname("127.0.0.1");
     if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
-        exit(0);
+        IHM_PrintInfoXY2(ihm, 15, 0,"ERROR, no such host\n", 0, 0);
     }
     bzero((char *) &serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -468,31 +469,33 @@ void setupSocket()
          server->h_length);
     serv_addr.sin_port = htons(portno);
     if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
-                        printf("ERROR connecting");
+        IHM_PrintInfoXY2(ihm, 16, 0,"ERROR connecting",0,0);
 
 }
 
 void writeSocket(uint8_t* data, int length){
+
     	int n = write(sockfd,data, length);
     	if (n < 0) 
-        	printf("ERROR writing to socket");
+        	IHM_PrintInfoXY2(ihm, 17, 0,"ERROR writing to socket",0,0);
 }
 		
-void listenSocket()
+void* listenSocket(void* argument)
 {
 	int count = 0;
+		IHM_PrintBuffer(ihm, "WAITING");
 	while(1) {
-    		bzero(bufferRead,256);
-    		int n = read(sockfd,bufferRead,SOCKET_BUFFER_SIZE-1);
-    		if (n < 0) {
-                       //printf("ERROR reading from socket");
-		}
-		else{
-		printf("Listening %d", count++);
+    		bzero(bufferRead,SOCKET_BUFFER_SIZE);
+    		int n = recv(sockfd,bufferRead,SOCKET_BUFFER_SIZE, MSG_WAITALL);
+		count+=n;
+		//IHM_PrintBuffer(ihm, "Testicles");
+		if(n>0){
+			IHM_PrintBufferSize(ihm, n);
 			fwrite(bufferRead, n, 1, videoOut);
-                	fflush (videoOut);
+	        	fflush (videoOut);
 		}
 	}
+	return "Fuck your face";
 }
 /*****************************************
  *
@@ -725,7 +728,7 @@ if ((commandKey == ARCONTROLLER_DICTIONARY_KEY_ARDRONE3_PILOTINGSTATE_SPEEDCHANG
                  stopped&=fabsf(accumulatedSpeed[i])<epsilon;
 	    }
 
-            IHM_PrintVelocity(ihm, accumulatedSpeed[0], accumulatedSpeed[1], accumulatedSpeed[2],stopped, wasMoving, counter2++);
+            //IHM_PrintVelocity(ihm, accumulatedSpeed[0], accumulatedSpeed[1], accumulatedSpeed[2],stopped, wasMoving, counter2++);
 	    if (stopped && wasMoving && !stopCommand) 
 	    {
 		moveCommands(deviceController);	
