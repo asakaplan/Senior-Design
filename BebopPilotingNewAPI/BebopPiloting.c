@@ -475,6 +475,8 @@ void setupSocket()
 
 void writeSocket(uint8_t* data, int length){
 
+
+    IHM_PrintInfoF(ihm, "Writing: %d", length);
   int n = write(sockfd,data, length);
   if (n < 0)
   IHM_PrintInfoXY2(ihm, 17, 0,"ERROR writing to socket",0,0);
