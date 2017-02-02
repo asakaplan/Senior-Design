@@ -82,7 +82,7 @@ SUCH DAMAGE.
 #define IHM
 
 
-#define NUM_COMMANDS 2
+#define NUM_COMMANDS 4
 #define SPEED_BUFFER_SIZE 5
 #define SOCKET_BUFFER_SIZE 32768
 
@@ -662,7 +662,7 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
       if (arg != NULL)
       {
         IHM_PrintVelocity(ihm, dXSum,dYSum,dZSum,false,false, counter1++);
-        moveCommands(deviceController);
+        //moveCommands(deviceController);
         //eARCOMMANDS_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR error = arg->value.I32;
       }
     }
@@ -680,11 +680,11 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
       {
         eARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE state = arg->value.I32;
         if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_HOVERING){
-          //moveCommands(deviceController);
+          moveCommands(deviceController);
           //moveCommands(deviceController);
         }
-        //IHM_PrintInfo(ihm, "The state changed to "+ state);
-        if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF || state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
+        IHM_PrintInfo(ihm, "The state changed to "+ state);
+        if(/*state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF || */state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
           wasTakingOff = true;
         }
         else if(wasTakingOff){
@@ -692,8 +692,8 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
 
           IHM_PrintInfoF(ihm, "In the taking off thing: %d", counter2++);
 
-          deviceController->aRDrone3->sendPilotingMoveBy(deviceController->aRDrone3, 0, 0, 0,0);
-          moveCommands(deviceController);
+          //deviceController->aRDrone3->sendPilotingMoveBy(deviceController->aRDrone3, 0, 0, 0,0);
+          //moveCommands(deviceController);
 
           wasTakingOff=false;
         }
@@ -922,7 +922,7 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
   }
 }
 int pos = 0;
-float commands[NUM_COMMANDS][4] = {{1.0f,0.0f,0.0f,0.0f},{-1.0f,0.0f,0.0f,0.0f}};//,{0.0f,1.0f,0.0f,0.0f},{0.0f,0.0f,0.0f,1.0f}};,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
+float commands[NUM_COMMANDS][4] = {{0.75f,0.0f,0.0f,0.0f},{0.0f,-0.75f,0.0f,0.0f},{-0.75f,0.0f,0.0f,0.0f},{0.0f,0.75f,0.0f,0.0f}};//,{0.0f,1.0f,0.0f,0.0f},{0.0f,0.0f,0.0f,1.0f}};,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
 void moveCommands(ARCONTROLLER_Device_t *deviceController)
 {
 

@@ -47,7 +47,7 @@ def main():
         global outputVideo
         outputVideo = cv2.VideoWriter()
 
-        while not cap.get(cv2.cv.CV_CAP_PROP_FPS):
+        while not cap.get(cv2.cv.CV_CAP_PROP_FPS) or not cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT):
                 print("Still waiting for the header")
                 time.sleep(.1)
         success = outputVideo.open(videoSend,  cv2.cv.CV_FOURCC(*'XVID'),int(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0)),(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))),1)
