@@ -1,17 +1,16 @@
 import cv2
 import sys
 import numpy as np
-from matplotlib import pyplot as plt
 
 
 cascPath = sys.argv[1]
 templatePath = sys.argv[2]
 faceCascade = cv2.CascadeClassifier(cascPath)
 template = cv2.imread(templatePath, 0)
-testSizes = [120, 240, 480]
+testSizes = [(30, 42), (60, 85), (90, 125), (125, 175), (185, 260), (250, 350)]
 xTemp = 0
 yTemp = 0
-threshold = 0.3
+threshold = 0.7
 
 video_capture = cv2.VideoCapture(0)
 
@@ -24,13 +23,17 @@ while True:
 
     # Match a Template
     for size in testSizes:
-        res = cv2.matchTemplate(gray, template, cv2.TM_CCOEFF_NORMED)
+        tempTemplate = cv2.resize(template, size)
+        cv2.imwrite('ya.png', tempTemplate)
+        res = cv2.matchTemplate(gray, tempTemplate, cv2.TM_CCOEFF_NORMED)
         loc = np.where(res >= threshold)
         for point in zip(*loc[::-1]):
-            cv2.rectangle(frame, point, (point[0] + 250, point[1] + 305), (0, 0, 255), 2)
+            detection = frame[point[1]:point[1] + size[1], point[0]:point[0] + size[0]]
+            # NOTE: its img[y: y + h, x: x + w]
+            cv2.rectangle(frame, point, (point[0] + size[0], point[1] + size[1]), (0, 0, 255), 4)
             xTemp = point[0]
             yTemp = point[1]
-            #theimage = cv2.getRectSubPix(frame, (point[0], point[1]), (250, 305))
+            break
 
     faces = faceCascade.detectMultiScale(
        gray,
@@ -43,7 +46,8 @@ while True:
     # Draw a rectangle around the faces
     for (x, y, w, h) in faces:
         if xTemp < 1 or (((x < xTemp) or (x > xTemp + 325)) and ((y < yTemp) or (y > yTemp + 325))):
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 2)
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 1)
+            #possibleFace = frame[y:y + h, x:x + w]
 
     # Display the resulting frame
     cv2.imshow('Video', frame)
@@ -52,7 +56,7 @@ while True:
         break
 
 # When everything is done, release the capture
-#theimage = cv2.getRectSubPix(frame,(400, 500),(10, 10))
-#cv2.imwrite('person.png', theimage)
+cv2.imwrite('person.png', detection)
+#cv2.imwrite('chris.png', possibleFace)
 video_capture.release()
 cv2.destroyAllWindows()
