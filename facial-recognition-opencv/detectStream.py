@@ -7,10 +7,10 @@ cascPath = sys.argv[1]
 templatePath = sys.argv[2]
 faceCascade = cv2.CascadeClassifier(cascPath)
 template = cv2.imread(templatePath, 0)
-testSizes = [(30, 42), (60, 85), (90, 125), (125, 175), (185, 260), (250, 350)]
+testSizes = [(60, 85), (90, 125), (125, 175), (185, 260), (250, 350)]
 xTemp = 0
 yTemp = 0
-threshold = 0.7
+threshold = 0.75
 
 video_capture = cv2.VideoCapture(0)
 
@@ -24,13 +24,13 @@ while True:
     # Match a Template
     for size in testSizes:
         tempTemplate = cv2.resize(template, size)
-        cv2.imwrite('ya.png', tempTemplate)
         res = cv2.matchTemplate(gray, tempTemplate, cv2.TM_CCOEFF_NORMED)
         loc = np.where(res >= threshold)
         for point in zip(*loc[::-1]):
             detection = frame[point[1]:point[1] + size[1], point[0]:point[0] + size[0]]
             # NOTE: its img[y: y + h, x: x + w]
             cv2.rectangle(frame, point, (point[0] + size[0], point[1] + size[1]), (0, 0, 255), 4)
+            cv2.putText(frame, templatePath, (point[0], point[1]), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.LINE_AA)
             xTemp = point[0]
             yTemp = point[1]
             break
@@ -56,7 +56,7 @@ while True:
         break
 
 # When everything is done, release the capture
-cv2.imwrite('person.png', detection)
+#cv2.imwrite('person.png', detection)
 #cv2.imwrite('chris.png', possibleFace)
 video_capture.release()
 cv2.destroyAllWindows()
