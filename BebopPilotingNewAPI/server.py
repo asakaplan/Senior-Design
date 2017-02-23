@@ -7,7 +7,7 @@ import os
 HOST = ''
 PORT = 8000
 
-videoSend = "videoOut.out"
+videoSend = "videoOut.avi"
 videoReceive = "videoTemp.avi"
 exitCode = False
 def main():
@@ -37,22 +37,25 @@ def main():
         print('Connected with ' + addr[0] + ":" + str(addr[1]))
         i = 0
         threading.Thread(target=dataReceive).start()
-        threading.Thread(target=dataSend).start()
         global cap
         cap = cv2.VideoCapture(videoReceive)
         while not cap.isOpened():
             cap = cv2.VideoCapture(videoReceive)
             time.sleep(.1)
             print("Wait for the header")
-        global outputVideo
-        outputVideo = cv2.VideoWriter()
 
-        while not cap.get(cv2.cv.CV_CAP_PROP_FPS) or not cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT):
+        while not round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0) or not round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0):
                 print("Still waiting for the header")
                 time.sleep(.1)
-        success = outputVideo.open(videoSend,  cv2.cv.CV_FOURCC(*'XVID'),int(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0)),(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))),1)
-        print("Success: ", success)
-	
+        print(cap.get(cv2.cv.CV_CAP_PROP_FPS))
+        sourceFPS = int(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0))
+        sourceDimensions = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
+
+        global outputVideo
+        outputVideo = cv2.VideoWriter(videoSend, cv2.cv.CV_FOURCC(*'XVID'), sourceFPS, sourceDimensions, 1)
+        print("Success: ", outputVideo.isOpened())
+        threading.Thread(target=dataSend).start()
+
         pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
         while True:
             flag, frame = cap.read()
@@ -60,59 +63,59 @@ def main():
                 # The frame is ready and already captured
                 #cv2.imshow('video', frame)
                 pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
-                
+
                 outputVideo.write(cv2.flip(frame,0))
                 pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
                 if(pos_frame%1000==0):print(str(pos_frame)+" frames")
             else:
-		# The next frame is not ready, so we try to read it again
+        # The next frame is not ready, so we try to read it again
                 cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES, pos_frame-1)
                 print("frame is not ready")
-		# It is better to wait for a while for the next frame to be ready
+        # It is better to wait for a while for the next frame to be ready
                 time.sleep(.5)
             if cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES) == cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT):
-		# If the number of captured frames is equal to the total number of frames,
-		# we stop
+        # If the number of captured frames is equal to the total number of frames,
+        # we stop
                 break
 
 
 
 def dataReceive():
-	while not exitCode:
-		data = conn.recv(2**15)
-		tempFile = open(videoReceive,"ab")
-		#print("Heyo here's some data: %d"%len(data))
-		tempFile.write(data)
-		tempFile.close()
-		#Process data
-		#conn.send(data)
+    tempFile = open(videoReceive, "w")
+    tempFile.close() #Delete old video
+    while not exitCode:
+        data = conn.recv(2**15)
+        tempFile = open(videoReceive,"ab")
+        #print("Heyo here's some data: %d"%len(data))
+        tempFile.write(data)
+        tempFile.close()
+        #Process data
+        #conn.send(data)
 def dataSend():
-	lastLength = 0
-	while 1:
-		try:
-			outp = open(videoSend, "rb")
-			data = "".join(outp.readlines())
-			if len(data)==lastLength:continue
-			print("New length: ", len(data))
-			conn.send(data[lastLength:])
-			lastLength=len(data)
-		except Exception as e:
-			#print("waiting for file to exist", e)
-			time.sleep(.1)
+    lastLength = 0
+    while not exitCode:
+        try:
+            outp = open(videoSend, "rb")
+            data = "".join(outp.readlines())
+            if len(data)==lastLength:continue
+            print("New length: ", len(data))
+            conn.send(data[lastLength:])
+            lastLength=len(data)
+        except Exception as e:
+            #print("waiting for file to exist", e)
+            time.sleep(.1)
 
 
 
 if __name__ == '__main__':
-	try:
-		main()
-	except KeyboardInterrupt:
-		print("Trying to quit!")
-		s.close()
-		cap.release()
-		videoSend.release()
-		videoReceive.release()
-		cv2.destroyAllWindows()
-		exitCode = True
-		raise
-
-
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("In Interrupt")
+        s.close()
+        cap.release()
+        outputVideo.release()
+        cv2.destroyAllWindows()
+        exitCode = True
+        print("End of interrupt")
+        raise

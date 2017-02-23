@@ -101,7 +101,7 @@ SUCH DAMAGE.
 *****************************************/
 
 static char fifo_dir[] = FIFO_DIR_PATTERN;
-static char fifo_name[128] = "";
+static char fifo_name[128] = "/home/asa/dev/parrot/packages/Samples/Unix/BebopPilotingNewAPI/PLEASEWORKIHAVECHILDRENWHOARESTARVING.avi";
 
 int gIHMRun = 1;
 char gErrorStr[ERROR_STR_LENGTH];
@@ -159,16 +159,26 @@ int main (int argc, char *argv[])
     ARSAL_PRINT(ARSAL_PRINT_ERROR, "ERROR", "Mkdtemp failed.");
     return 1;
   }
-  snprintf(fifo_name, sizeof(fifo_name), "%s/%s", fifo_dir, FIFO_NAME);
+  //snprintf(fifo_name, sizeof(fifo_name), "%s/%s", fifo_dir, FIFO_NAME);
+printf("%s\n", fifo_name);
+if (DISPLAY_WITH_MPLAYER)
+{
+  videoOut = fopen("/home/asa/dev/parrot/packages/Samples/Unix/BebopPilotingNewAPI/PLEASEWORKIHAVECHILDRENWHOARESTARVING.avi", "w+");
+  if(!videoOut){
 
-  if(mkfifo(fifo_name, 0666) < 0)
+      printf("DIDN'T OPEN\n");
+  }
+  else{
+    printf("Did Open\n");
+  }
+}
+  /*if(mkfifo(fifo_name, 0777) < 0)
   {
     ARSAL_PRINT(ARSAL_PRINT_ERROR, "ERROR", "Mkfifo failed: %d, %s", errno, strerror(errno));
-    return 1;
-  }
+    //return 1;
+  }*/
 
   ARSAL_Sem_Init (&(stateSem), 0, 0);
-
   ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Select your Bebop : Bebop (1) ; Bebop2 (2)");
   isBebop2 = 0;
 
@@ -194,10 +204,7 @@ int main (int argc, char *argv[])
       }
     }
 
-    if (DISPLAY_WITH_MPLAYER)
-    {
-      videoOut = fopen(fifo_name, "w");
-    }
+
   }
 
   #ifdef IHM
@@ -475,8 +482,6 @@ void setupSocket()
 
 void writeSocket(uint8_t* data, int length){
 
-
-    IHM_PrintInfoF(ihm, "Writing: %d", length);
   int n = write(sockfd,data, length);
   if (n < 0)
   IHM_PrintInfoXY2(ihm, 17, 0,"ERROR writing to socket",0,0);
@@ -486,14 +491,18 @@ void* listenSocket(void* argument)
 {
   int count = 0;
   IHM_PrintBuffer(ihm, "WAITING");
+  int i = 0;
   while(1) {
     bzero(bufferRead,SOCKET_BUFFER_SIZE);
     int n = recv(sockfd,bufferRead,SOCKET_BUFFER_SIZE, MSG_WAITALL);
     count+=n;
+
     //IHM_PrintBuffer(ihm, "Testicles");
     if(n>0){
+      i+=1;
+      fprintf(videoOut, "Test\n");
+    IHM_PrintInfoF2(ihm, "Writing: %d with %d", n,i);//   fwrite("test", 1, 3, videoOut));
       IHM_PrintBufferSize(ihm, n);
-      fwrite(bufferRead, n, 1, videoOut);
       fflush (videoOut);
     }
   }
