@@ -9,7 +9,7 @@ template = cv2.imread(templatePath, 0)
 sizes = [80, 100, 120, 140, 160, 180, 200, 220, 240, 260]
 xTemp = 0
 yTemp = 0
-threshold = 0.75
+threshold = 0.735
 
 video_capture = cv2.VideoCapture(0)
 
@@ -29,7 +29,7 @@ while True:
             detection = frame[point[1]:point[1] + size, point[0]:point[0] + size]
             # NOTE: its img[y: y + h, x: x + w]
             cv2.rectangle(frame, point, (point[0] + size, point[1] + size), (0, 0, 255), 4)
-            cv2.putText(frame, templatePath, (point[0], point[1]), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, templatePath[:-4], (point[0], point[1]), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.LINE_AA)
             xTemp = point[0]
             yTemp = point[1]
             cv2.imwrite('detections/detection_' + str(point[0] - point[0]%100) + '_' + str(point[1] - point[1]%100) + '_' + templatePath, detection)
