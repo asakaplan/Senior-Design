@@ -172,6 +172,7 @@ if (DISPLAY_WITH_MPLAYER)
     printf("Did Open\n");
   }
 }
+
   /*if(mkfifo(fifo_name, 0777) < 0)
   {
     ARSAL_PRINT(ARSAL_PRINT_ERROR, "ERROR", "Mkfifo failed: %d, %s", errno, strerror(errno));

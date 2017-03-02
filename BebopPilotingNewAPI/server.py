@@ -6,35 +6,48 @@ import time
 import os
 HOST = ''
 PORT = 8000
+PORT_OUT = 8001
 
 videoSend = "videoOut.avi"
 videoReceive = "videoTemp.avi"
 exitCode = False
+def setupSocket(port):
+    soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+    print( 'Socket created')
+
+    try:
+            soc.bind((HOST,PORT))
+    except socket.error as msg:
+            print('Bind failed. Error Code : ' + str(msg))
+            sys.exit()
+    print('Socket bind complete')
+
+
+    soc.listen(10)
+    print('Socket now listening')
+    return soc
+def isValid(val):
+    return bool(val) and val!=float("nan")
 def main():
         try:
            os.remove(videoSend)
            os.remove(videoReceive)
         except Exception:
            pass
+        os.mkfifo(videoSend)
 
         global s
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-        print( 'Socket created')
-
-        try:
-                s.bind((HOST,PORT))
-        except socket.error as msg:
-                print('Bind failed. Error Code : ' + str(msg))
-                sys.exit()
-        print('Socket bind complete')
-
-
-        s.listen(10)
-        print('Socket now listening')
+        s = setupSocket(PORT)
         global conn
         conn, addr = s.accept()
         print('Connected with ' + addr[0] + ":" + str(addr[1]))
+
+        global sOut
+        sOut = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sOut.connect(("localhost",PORT_OUT))
+        print('Connected with out ' + addr[0] + ":" + str(addr[1]))
+
         i = 0
         threading.Thread(target=dataReceive).start()
         global cap
@@ -44,13 +57,13 @@ def main():
             time.sleep(.1)
             print("Wait for the header")
 
-        while not round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0) or not round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0):
+        while not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH),0)):
                 print("Still waiting for the header")
                 time.sleep(.1)
         print(cap.get(cv2.cv.CV_CAP_PROP_FPS))
         sourceFPS = int(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0))
         sourceDimensions = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
-
+        print("FOURCC:",cap.get(cv2.cv.CV_CAP_PROP_FOURCC))
         global outputVideo
         outputVideo = cv2.VideoWriter(videoSend, cv2.cv.CV_FOURCC(*'XVID'), sourceFPS, sourceDimensions, 1)
         print("Success: ", outputVideo.isOpened())
@@ -91,20 +104,22 @@ def dataReceive():
         tempFile.close()
         #Process data
         #conn.send(data)
+
 def dataSend():
     lastLength = 0
+    outp = None
     while not exitCode:
+        print("Trying to open output file")
         try:
             outp = open(videoSend, "rb")
-            data = "".join(outp.readlines())
-            if len(data)==lastLength:continue
-            print("New length: ", len(data))
-            conn.send(data[lastLength:])
-            lastLength=len(data)
+            break
         except Exception as e:
-            #print("waiting for file to exist", e)
             time.sleep(.1)
 
+    for line in outp:
+        #outp is a fifo, so this will continue to go until the program is exited
+        if exitCode:break
+        sOut.send(line)
 
 
 if __name__ == '__main__':
@@ -112,10 +127,11 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         print("In Interrupt")
+        exitCode = True
+        os.unlink(videoSend)
         s.close()
         cap.release()
         outputVideo.release()
         cv2.destroyAllWindows()
-        exitCode = True
         print("End of interrupt")
         raise
