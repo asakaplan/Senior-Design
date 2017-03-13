@@ -4,11 +4,17 @@ import threading
 import cv2
 import time
 import os
-HOST = ''
-PORT = 8001
+from server import PORT_VIDEO, PORT_DATA
+HOST = '0.0.0.0'
 
 videoReceive = "PLEASEWORK.avi"
 exitCode = False
+def connectPort(port):
+    soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    soc.connect(("localhost",port))
+    print('Connected with out ' + addr[0] + ":" + str(addr[1]))
+    return soc
+
 def main():
         try:
            os.remove(videoSend)
@@ -16,56 +22,18 @@ def main():
         except Exception:
            pass
 
-        global s
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-        print( 'Socket created')
+        global socketVideo, socketData, connVideo, connData
 
-        try:
-                s.bind((HOST,PORT))
-        except socket.error as msg:
-                print('Bind failed. Error Code : ' + str(msg))
-                sys.exit()
-        print('Socket bind complete')
+        socketVideo = connectPort(PORT_VIDEO)
+        socketData = connectPort(PORT_DATA)
 
-
-        s.listen(10)
-        print('Socket now listening')
-        global conn
-        conn, addr = s.accept()
-        print('Connected with ' + addr[0] + ":" + str(addr[1]))
         i = 0
-        print("Here1")
         os.remove(videoReceive)
-        print("Here2")
-        #os.mkfifo(videoReceive)
-        print("Here3")
         tempFile = open(videoReceive,"wb")
-        print("Here4")
         while not exitCode:
-            #print("In statement")
-            #print("Heyo here's some data: %d"%len(data))
             data = conn.recv(2**15)
-            #print("Received")
             tempFile.write(data)
-            #Process data
-            #conn.send(data)
 
-
-
-"""def dataReceive():
-    os.remove(videoReceive)
-    os.mkfifo(videoReceive)
-    tempFile = open(videoReceive,"ab")
-    while not exitCode:
-        print("In statement")
-        #print("Heyo here's some data: %d"%len(data))
-        data = conn.recv(2**15)
-        print("Received")
-        tempFile.write(data)
-        #Process data
-        #conn.send(data)
-"""
 if __name__ == '__main__':
     try:
         main()
