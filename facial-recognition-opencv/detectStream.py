@@ -10,7 +10,7 @@ cascadePath = sys.argv[1]
 faceCascade = cv2.CascadeClassifier(cascadePath)
 template = 0
 sizes = [80, 100, 120, 140, 160, 180, 200, 220, 240, 260]
-threshold = 0.7
+threshold = 0.725
 ix, iy = -1, -1
 ievent = 0
 templateName = ''
@@ -112,6 +112,7 @@ def execute_main_loop():
                     if (ievent == cv2.EVENT_LBUTTONDOWN) and (x < ix) and (x + w > ix) and (y < iy) and (y + h > iy):
                         cv2.imshow('Recognized', possibleFace)
                         ix, iy = -1, -1
+                        ievent = None
                         create_new_text_window()
                         cv2.imwrite('faces/' + templateName + '.png', possibleFace)
 
