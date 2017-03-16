@@ -9,6 +9,7 @@ HOST = '0.0.0.0'
 
 videoReceive = "PLEASEWORK.avi"
 exitCode = False
+
 def connectPort(port):
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     soc.connect(("localhost",port))
@@ -17,7 +18,6 @@ def connectPort(port):
 
 def main():
         try:
-           os.remove(videoSend)
            os.remove(videoReceive)
         except Exception:
            pass
@@ -33,6 +33,22 @@ def main():
         while not exitCode:
             data = conn.recv(2**15)
             tempFile.write(data)
+
+def dataReceive():
+    global rects, texts
+    try:
+        os.remove(videoReceive)
+    except:
+        pass
+    tempFile = open(videoReceive, "w")
+    dataString = ""
+    while not exitCode:
+        dataVideo = socketVideo.recv(2**15)
+        tempFile = open(videoReceive,"ab")
+        tempFile.write(dataVideo)
+        tempFile.close()
+        dataData = socketData.recv(2**10)
+        dataString +=dataData
 
 if __name__ == '__main__':
     try:
