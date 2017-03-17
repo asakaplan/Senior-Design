@@ -82,7 +82,7 @@ SUCH DAMAGE.
 #define IHM
 
 
-#define NUM_COMMANDS 2
+#define NUM_COMMANDS 4
 #define SPEED_BUFFER_SIZE 5
 #define SOCKET_BUFFER_SIZE 32768
 
@@ -101,13 +101,12 @@ SUCH DAMAGE.
 *****************************************/
 
 static char fifo_dir[] = FIFO_DIR_PATTERN;
-static char fifo_name[128] = "";
+static char fifo_name[128] = "/home/asa/dev/parrot/packages/Samples/Unix/BebopPilotingNewAPI/PLEASEWORKIHAVECHILDRENWHOARESTARVING.avi";
 
 int gIHMRun = 1;
 char gErrorStr[ERROR_STR_LENGTH];
 IHM_t *ihm = NULL;
 
-FILE *videoOut = NULL;
 int frameNb = 0;
 ARSAL_Sem_t stateSem;
 int isBebop2 = 0;
@@ -159,16 +158,15 @@ int main (int argc, char *argv[])
     ARSAL_PRINT(ARSAL_PRINT_ERROR, "ERROR", "Mkdtemp failed.");
     return 1;
   }
-  snprintf(fifo_name, sizeof(fifo_name), "%s/%s", fifo_dir, FIFO_NAME);
 
-  if(mkfifo(fifo_name, 0666) < 0)
+
+  /*if(mkfifo(fifo_name, 0777) < 0)
   {
     ARSAL_PRINT(ARSAL_PRINT_ERROR, "ERROR", "Mkfifo failed: %d, %s", errno, strerror(errno));
-    return 1;
-  }
+    //return 1;
+  }*/
 
   ARSAL_Sem_Init (&(stateSem), 0, 0);
-
   ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Select your Bebop : Bebop (1) ; Bebop2 (2)");
   isBebop2 = 0;
 
@@ -194,10 +192,7 @@ int main (int argc, char *argv[])
       }
     }
 
-    if (DISPLAY_WITH_MPLAYER)
-    {
-      videoOut = fopen(fifo_name, "w");
-    }
+
   }
 
   #ifdef IHM
@@ -363,9 +358,9 @@ int main (int argc, char *argv[])
   {
 
     setupSocket();
-    pthread_t thread;
+    /*pthread_t thread;
     int result_code = pthread_create(&thread, NULL, listenSocket, (void*)"TEST");
-    assert( !result_code );
+    assert( !result_code );*/
   }
 
 
@@ -428,8 +423,6 @@ int main (int argc, char *argv[])
     shutdown(sockfd, 2);
     if (DISPLAY_WITH_MPLAYER)
     {
-      fflush (videoOut);
-      fclose (videoOut);
 
       if (child > 0)
       {
@@ -454,7 +447,7 @@ void setupSocket()
   struct sockaddr_in serv_addr;
   struct hostent *server;
 
-  portno = 8000;
+  portno = 8080;
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0)
   IHM_PrintInfoXY2(ihm, 14, 0, "ERROR opening socket", 0, 0);
@@ -475,30 +468,11 @@ void setupSocket()
 
 void writeSocket(uint8_t* data, int length){
 
-
-    IHM_PrintInfoF(ihm, "Writing: %d", length);
   int n = write(sockfd,data, length);
   if (n < 0)
   IHM_PrintInfoXY2(ihm, 17, 0,"ERROR writing to socket",0,0);
 }
 
-void* listenSocket(void* argument)
-{
-  int count = 0;
-  IHM_PrintBuffer(ihm, "WAITING");
-  while(1) {
-    bzero(bufferRead,SOCKET_BUFFER_SIZE);
-    int n = recv(sockfd,bufferRead,SOCKET_BUFFER_SIZE, MSG_WAITALL);
-    count+=n;
-    //IHM_PrintBuffer(ihm, "Testicles");
-    if(n>0){
-      IHM_PrintBufferSize(ihm, n);
-      fwrite(bufferRead, n, 1, videoOut);
-      fflush (videoOut);
-    }
-  }
-  return "Testing";
-}
 /*****************************************
 *
 *             private implementation:
@@ -662,7 +636,7 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
       if (arg != NULL)
       {
         IHM_PrintVelocity(ihm, dXSum,dYSum,dZSum,false,false, counter1++);
-        moveCommands(deviceController);
+        //moveCommands(deviceController);
         //eARCOMMANDS_ARDRONE3_PILOTINGEVENT_MOVEBYEND_ERROR error = arg->value.I32;
       }
     }
@@ -680,11 +654,10 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
       {
         eARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE state = arg->value.I32;
         if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_HOVERING){
-          //moveCommands(deviceController);
+          moveCommands(deviceController);
           //moveCommands(deviceController);
         }
-        //IHM_PrintInfo(ihm, "The state changed to "+ state);
-        if(state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF || state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
+        if(/*state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF || */state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
           wasTakingOff = true;
         }
         else if(wasTakingOff){
@@ -692,8 +665,8 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
 
           IHM_PrintInfoF(ihm, "In the taking off thing: %d", counter2++);
 
-          deviceController->aRDrone3->sendPilotingMoveBy(deviceController->aRDrone3, 0, 0, 0,0);
-          moveCommands(deviceController);
+          //deviceController->aRDrone3->sendPilotingMoveBy(deviceController->aRDrone3, 0, 0, 0,0);
+          //moveCommands(deviceController);
 
           wasTakingOff=false;
         }
@@ -767,8 +740,6 @@ void batteryStateChanged (uint8_t percent)
 
 eARCONTROLLER_ERROR decoderConfigCallback (ARCONTROLLER_Stream_Codec_t codec, void *customData)
 {
-  if (videoOut != NULL)
-  {
     if (codec.type == ARCONTROLLER_STREAM_CODEC_TYPE_H264)
     {
       if (DISPLAY_WITH_MPLAYER)
@@ -778,11 +749,6 @@ eARCONTROLLER_ERROR decoderConfigCallback (ARCONTROLLER_Stream_Codec_t codec, vo
       }
     }
 
-  }
-  else
-  {
-    ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "videoOut is NULL.");
-  }
 
   return ARCONTROLLER_OK;
 }
@@ -790,8 +756,6 @@ eARCONTROLLER_ERROR decoderConfigCallback (ARCONTROLLER_Stream_Codec_t codec, vo
 
 eARCONTROLLER_ERROR didReceiveFrameCallback (ARCONTROLLER_Frame_t *frame, void *customData)
 {
-  if (videoOut != NULL)
-  {
     if (frame != NULL)
     {
       if (DISPLAY_WITH_MPLAYER)
@@ -803,11 +767,7 @@ eARCONTROLLER_ERROR didReceiveFrameCallback (ARCONTROLLER_Frame_t *frame, void *
     {
       ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "frame is NULL.");
     }
-  }
-  else
-  {
-    ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "videoOut is NULL.");
-  }
+
 
   return ARCONTROLLER_OK;
 }
@@ -922,7 +882,7 @@ void onInputEvent (eIHM_INPUT_EVENT event, void *customData)
   }
 }
 int pos = 0;
-float commands[NUM_COMMANDS][4] = {{1.0f,0.0f,0.0f,0.0f},{-1.0f,0.0f,0.0f,0.0f}};//,{0.0f,1.0f,0.0f,0.0f},{0.0f,0.0f,0.0f,1.0f}};,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
+float commands[NUM_COMMANDS][4] = {{0.75f,0.0f,0.0f,0.0f},{0.0f,-0.75f,0.0f,0.0f},{-0.75f,0.0f,0.0f,0.0f},{0.0f,0.75f,0.0f,0.0f}};//,{0.0f,1.0f,0.0f,0.0f},{0.0f,0.0f,0.0f,1.0f}};,{2.0f,0.0f,0.0f,1.5708f},{2.0f,0.0f,0.0f,1.5708f}};//{{0.0f,1.0f,0.0f,1.5708f},{1.0f,0.0f,0.0f,1.5708f},{0.0f,-1.0f,-0.0f,1.5708f},{-1.0f,0.0f,0.0f,1.5708f}};
 void moveCommands(ARCONTROLLER_Device_t *deviceController)
 {
 
