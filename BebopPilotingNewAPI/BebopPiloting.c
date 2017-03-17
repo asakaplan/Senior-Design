@@ -107,7 +107,6 @@ int gIHMRun = 1;
 char gErrorStr[ERROR_STR_LENGTH];
 IHM_t *ihm = NULL;
 
-FILE *videoOut = NULL;
 int frameNb = 0;
 ARSAL_Sem_t stateSem;
 int isBebop2 = 0;
@@ -159,19 +158,7 @@ int main (int argc, char *argv[])
     ARSAL_PRINT(ARSAL_PRINT_ERROR, "ERROR", "Mkdtemp failed.");
     return 1;
   }
-  //snprintf(fifo_name, sizeof(fifo_name), "%s/%s", fifo_dir, FIFO_NAME);
-printf("%s\n", fifo_name);
-if (DISPLAY_WITH_MPLAYER)
-{
-  videoOut = fopen("/home/asa/dev/parrot/packages/Samples/Unix/BebopPilotingNewAPI/PLEASEWORKIHAVECHILDRENWHOARESTARVING.avi", "w+");
-  if(!videoOut){
 
-      printf("DIDN'T OPEN\n");
-  }
-  else{
-    printf("Did Open\n");
-  }
-}
 
   /*if(mkfifo(fifo_name, 0777) < 0)
   {
@@ -371,9 +358,9 @@ if (DISPLAY_WITH_MPLAYER)
   {
 
     setupSocket();
-    pthread_t thread;
+    /*pthread_t thread;
     int result_code = pthread_create(&thread, NULL, listenSocket, (void*)"TEST");
-    assert( !result_code );
+    assert( !result_code );*/
   }
 
 
@@ -436,8 +423,6 @@ if (DISPLAY_WITH_MPLAYER)
     shutdown(sockfd, 2);
     if (DISPLAY_WITH_MPLAYER)
     {
-      fflush (videoOut);
-      fclose (videoOut);
 
       if (child > 0)
       {
@@ -462,7 +447,7 @@ void setupSocket()
   struct sockaddr_in serv_addr;
   struct hostent *server;
 
-  portno = 8000;
+  portno = 8080;
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0)
   IHM_PrintInfoXY2(ihm, 14, 0, "ERROR opening socket", 0, 0);
@@ -488,27 +473,6 @@ void writeSocket(uint8_t* data, int length){
   IHM_PrintInfoXY2(ihm, 17, 0,"ERROR writing to socket",0,0);
 }
 
-void* listenSocket(void* argument)
-{
-  int count = 0;
-  IHM_PrintBuffer(ihm, "WAITING");
-  int i = 0;
-  while(1) {
-    bzero(bufferRead,SOCKET_BUFFER_SIZE);
-    int n = recv(sockfd,bufferRead,SOCKET_BUFFER_SIZE, MSG_WAITALL);
-    count+=n;
-
-    //IHM_PrintBuffer(ihm, "Testicles");
-    if(n>0){
-      i+=1;
-      fprintf(videoOut, "Test\n");
-    IHM_PrintInfoF2(ihm, "Writing: %d with %d", n,i);//   fwrite("test", 1, 3, videoOut));
-      IHM_PrintBufferSize(ihm, n);
-      fflush (videoOut);
-    }
-  }
-  return "Testing";
-}
 /*****************************************
 *
 *             private implementation:
@@ -693,7 +657,6 @@ void commandReceived (eARCONTROLLER_DICTIONARY_KEY commandKey, ARCONTROLLER_DICT
           moveCommands(deviceController);
           //moveCommands(deviceController);
         }
-        IHM_PrintInfo(ihm, "The state changed to "+ state);
         if(/*state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_TAKINGOFF || */state == ARCOMMANDS_ARDRONE3_PILOTINGSTATE_FLYINGSTATECHANGED_STATE_USERTAKEOFF){
           wasTakingOff = true;
         }
@@ -777,8 +740,6 @@ void batteryStateChanged (uint8_t percent)
 
 eARCONTROLLER_ERROR decoderConfigCallback (ARCONTROLLER_Stream_Codec_t codec, void *customData)
 {
-  if (videoOut != NULL)
-  {
     if (codec.type == ARCONTROLLER_STREAM_CODEC_TYPE_H264)
     {
       if (DISPLAY_WITH_MPLAYER)
@@ -788,11 +749,6 @@ eARCONTROLLER_ERROR decoderConfigCallback (ARCONTROLLER_Stream_Codec_t codec, vo
       }
     }
 
-  }
-  else
-  {
-    ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "videoOut is NULL.");
-  }
 
   return ARCONTROLLER_OK;
 }
@@ -800,8 +756,6 @@ eARCONTROLLER_ERROR decoderConfigCallback (ARCONTROLLER_Stream_Codec_t codec, vo
 
 eARCONTROLLER_ERROR didReceiveFrameCallback (ARCONTROLLER_Frame_t *frame, void *customData)
 {
-  if (videoOut != NULL)
-  {
     if (frame != NULL)
     {
       if (DISPLAY_WITH_MPLAYER)
@@ -813,11 +767,7 @@ eARCONTROLLER_ERROR didReceiveFrameCallback (ARCONTROLLER_Frame_t *frame, void *
     {
       ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "frame is NULL.");
     }
-  }
-  else
-  {
-    ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "videoOut is NULL.");
-  }
+
 
   return ARCONTROLLER_OK;
 }

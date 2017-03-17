@@ -3,14 +3,15 @@ import sys
 import threading
 import cv2
 import time
-from os import *
+from os import listdir, mkfifo, remove, unlink
 from os.path import *
 import multiprocessing
 import numpy as np
+from math import isnan
 
 
 HOST = ''
-PORT = 8000
+PORT = 8080
 PORT_VIDEO = 8001
 PORT_DATA = 8002
 threshold = 0.725
@@ -26,22 +27,21 @@ def setupSocket(port):
     soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
     print( 'Socket created')
     try:
-            soc.bind((HOST,PORT))
+            soc.bind((HOST,port))
     except socket.error as msg:
             print('Bind failed. Error Code : ' + str(msg))
             sys.exit()
     print('Socket bind complete')
     soc.listen(10)
-    print('Socket now listening')
-    conn, addr = s.accept()
+    print('Socket now listening on port %d'%port)
+    conn, addr = soc.accept()
     print('Connected with ' + addr[0] + ":" + str(addr[1]))
     return soc, conn
 
 def isValid(val):
-    return bool(val) and val!=float("nan")
+    return bool(val) and not isnan(val)
 
 def detect(frame, faceFiles, templates, sizes, threshold, texts, rects):
-    print("In detect")
     xTemp = 0
     yTemp = 0
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -93,8 +93,6 @@ def detect(frame, faceFiles, templates, sizes, threshold, texts, rects):
         texts.pop()#clear the list
     for t in textTemp:
         texts.append(t)
-    print(rects)
-    print(texts)
 
 def main():
     global rects, texts, templates, faceFiles
@@ -111,17 +109,21 @@ def main():
             faceFiles.pop(i)
     try:
        remove(videoSend)
-       remove(videoReceive)
     except Exception:
        pass
+    try:
+        remove(videoReceive)
+    except Exception:
+        pass
     mkfifo(videoSend)
+    mkfifo(videoReceive)
 
-    global s, conn
-    s, conn = setupSocket(PORT)
     global sData, connData
     sData, connData = setupSocket(PORT_DATA)
     global sVideo, connVideo
     sVideo, connVideo = setupSocket(PORT_VIDEO)
+    global s, conn
+    s, conn = setupSocket(PORT)
 
     i = 0
     threading.Thread(target=dataReceive).start()
@@ -132,24 +134,24 @@ def main():
         time.sleep(.1)
         print("Wait for the header")
 
-    while not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH),0)):
+    while not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH),0)):
+            print (round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0), round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0), round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH),0))
             print("Still waiting for the header")
             time.sleep(.1)
     print(cap.get(cv2.cv.CV_CAP_PROP_FPS))
-    sourceFPS = int(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0))
+    sourceFPS = 30#int(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0))
     sourceDimensions = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
     print("FOURCC:",cap.get(cv2.cv.CV_CAP_PROP_FOURCC))
     global outputVideo
+    threading.Thread(target=dataSend).start()
     outputVideo = cv2.VideoWriter(videoSend, cv2.cv.CV_FOURCC(*'XVID'), sourceFPS, sourceDimensions, 1)
     print("Success: ", outputVideo.isOpened())
-    threading.Thread(target=dataSend).start()
-
+    process = None
     pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
     while True:
         flag, frame = cap.read()
         if flag:
             if not process or not process.is_alive():
-                print("In process")
                 if process:
                     process.join(1)
                 curFrame = frame
@@ -157,12 +159,11 @@ def main():
                 process.start()
                 if len(rects)>0 or len(texts)>0:
                     connData.send(str([list(rects), list(texts)]))
-                print("Out process")
             # The frame is ready and already captured
             #cv2.imshow('video', frame)
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
 
-            outputVideo.write(cv2.flip(frame,0))
+            outputVideo.write(frame)
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
             if(pos_frame%1000==0):print(str(pos_frame)+" frames")
         else:

@@ -14,7 +14,8 @@ def get_window_text():
     global templateName
     templateName = e.get()
     master.destroy()
-
+def isValid(val):
+    return bool(val) and val!=float("nan")
 
 #Freezes current process to enter text for clicked image
 def create_new_text_window():
@@ -30,8 +31,9 @@ def create_new_text_window():
 
 def connectPort(port):
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    soc.connect(("localhost",port))
-    print('Connected with out ' + addr[0] + ":" + str(addr[1]))
+    print("Attempting connection with port %d"%port)
+    soc.connect(("127.0.0.1",port))
+    #print('Connected with out ' + addr[0] + ":" + str(addr[1]))
     return soc
 
 #Mouse callback function to get position and click event
@@ -55,19 +57,32 @@ def main():
 
         global socketVideo, socketData, connVideo, connData
 
-        socketVideo = connectPort(PORT_VIDEO)
         socketData = connectPort(PORT_DATA)
+        time.sleep(.5)
+        socketVideo = connectPort(PORT_VIDEO)
         global ix, iy, ievent, master, templateName, rects, texts, curFrame, templates, faceFiles
         rects = []
         texts = []
-        manager = multiprocessing.Manager()
 
-        threading.Thread(target=dataReceive).start()
+        os.mkfifo(videoReceive)
+        threading.Thread(target=dataDataReceive).start()
+        threading.Thread(target=dataVideoReceive).start()
+        cap = cv2.VideoCapture(videoReceive)
+        while not cap.isOpened():
+            cap = cv2.VideoCapture(videoReceive)
+            time.sleep(.1)
+            print("Wait for the header")
 
+        while not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FPS),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT),0)) or not isValid(round(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH),0)):
+                print("Still waiting for the header")
+                time.sleep(.1)
+        print(cap.get(cv2.cv.CV_CAP_PROP_FPS))
         while True:
             # Capture frame-by-frame
-            ret, frame = video_capture.read()
-
+            flag, frame = cap.read()
+            if not flag:
+                print "Frame not ready"
+                continue
             for rect in rects:
                 cv2.rectangle(frame,*(rect))
 
@@ -79,32 +94,25 @@ def main():
             #Quit when q is pressed
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-            i = 0
-            os.remove(videoReceive)
-            tempFile = open(videoReceive,"wb")
-
-def dataReceive():
+def dataDataReceive():
     global rects, texts
-    try:
-        os.remove(videoReceive)
-    except:
-        pass
-    tempFile = open(videoReceive, "w")
     dataString = ""
+    while not exitCode:
+        dataData = socketData.recv(2**10)
+        dataString +=dataData
+        if dataString.count("]")>=2:
+            print dataString
+            ind = dataString.find("]]")
+            dataTemp = dataString[:ind+2]
+            dataString = dataString[ind+2:]
+            [rects, texts] = eval(dataTemp)#Technically kinda vulnerable, but the connection itself is secure
+def dataVideoReceive():
+    tempFile = open(videoReceive, "w")
     while not exitCode:
         dataVideo = socketVideo.recv(2**15)
         tempFile = open(videoReceive,"ab")
         tempFile.write(dataVideo)
         tempFile.close()
-        dataData = socketData.recv(2**10)
-        dataString +=dataData
-        if dataString.count("]")>=2:
-            dataString = dataString[1:] #strip first [
-            ind = dataString.find("]]")
-            dataTemp = dataString[:ind+2]
-            dataString = dataString[ind+2:]
-            [rects, texts] = exec(dataTemp)#Technically kinda vulnerable, but the connection itself is secure
-
 if __name__ == '__main__':
     try:
         main()
