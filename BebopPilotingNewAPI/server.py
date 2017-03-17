@@ -55,7 +55,7 @@ def detect(frame, faceFiles, templates, sizes, threshold, texts, rects):
             res = cv2.matchTemplate(gray, tempTemplate, cv2.TM_CCOEFF_NORMED)
             loc = np.where(res >= threshold)
             for point in zip(*loc[::-1]):
-                print("Detected")
+                print("Detected:", len(point))
                 detection = frame[point[1]:point[1] + size, point[0]:point[0] + size]
                 # NOTE: its img[y: y + h, x: x + w]
                 rectsTemp.append((point, (point[0] + size, point[1] + size), (0, 0, 255), 4))
@@ -150,12 +150,14 @@ def main():
         if flag:
             if not process or not process.is_alive():
                 print("In process")
-            if process:
-                process.join(1)
-            curFrame = frame
-            process = multiprocessing.Process(target=detect, args=(frame, faceFiles, templates, sizes, threshold, texts, rects))
-            process.start()
-            print("Out process")
+                if process:
+                    process.join(1)
+                curFrame = frame
+                process = multiprocessing.Process(target=detect, args=(frame, faceFiles, templates, sizes, threshold, texts, rects))
+                process.start()
+                if len(rects)>0 or len(texts)>0:
+                    connData.send(str([list(rects), list(texts)]))
+                print("Out process")
             # The frame is ready and already captured
             #cv2.imshow('video', frame)
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
