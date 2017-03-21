@@ -9,6 +9,7 @@ HOST = '0.0.0.0'
 
 videoReceive = "PLEASEWORK.avi"
 exitCode = False
+notEnoughData = True
 #This simply returns and destroys the text box window
 def get_window_text():
     global templateName
@@ -67,6 +68,9 @@ def main():
         os.mkfifo(videoReceive)
         threading.Thread(target=dataDataReceive).start()
         threading.Thread(target=dataVideoReceive).start()
+        while notEnoughData:
+            print("Waiting for more data")
+            time.sleep(.1)
         cap = cv2.VideoCapture(videoReceive)
         while not cap.isOpened():
             cap = cv2.VideoCapture(videoReceive)
@@ -107,12 +111,17 @@ def dataDataReceive():
             dataString = dataString[ind+2:]
             [rects, texts] = eval(dataTemp)#Technically kinda vulnerable, but the connection itself is secure
 def dataVideoReceive():
+    global notEnoughData
+    totalData = 0
     tempFile = open(videoReceive, "w")
     while not exitCode:
         dataVideo = socketVideo.recv(2**15)
-        tempFile = open(videoReceive,"ab")
+        totalData+=len(dataVideo)
+        print("Current Data is %d"%totalData)
+        if totalData>=10000:
+            notEnoughData=False
         tempFile.write(dataVideo)
-        tempFile.close()
+    tempFile.close()
 if __name__ == '__main__':
     try:
         main()

@@ -19,6 +19,7 @@ threshold = 0.725
 videoSend = "videoOut.avi"
 videoReceive = "videoTemp.avi"
 exitCode = False
+notEnoughData = True
 faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 sizes = [80, 100, 120, 140, 160, 180, 200, 220, 240, 260]
 
@@ -102,7 +103,7 @@ def main():
     faceDir = "faces"
     faceFiles = [f for f in listdir(faceDir) if isfile(join(faceDir, f))]
     print(faceFiles)
-    templates = [cv2.imread(face, 0) for face in faceFiles]
+    templates = [cv2.imread(join(faceDir, face), 0) for face in faceFiles]
     for i in range(len(faceFiles)-1,-1,-1):
         if templates[i]==None or not templates[i].size:
             templates.pop(i)
@@ -127,6 +128,9 @@ def main():
 
     i = 0
     threading.Thread(target=dataReceive).start()
+    while notEnoughData:
+        print("Waiting for more data")
+        time.sleep(.1)
     global cap
     cap = cv2.VideoCapture(videoReceive)
     while not cap.isOpened():
@@ -157,8 +161,7 @@ def main():
                 curFrame = frame
                 process = multiprocessing.Process(target=detect, args=(frame, faceFiles, templates, sizes, threshold, texts, rects))
                 process.start()
-                if len(rects)>0 or len(texts)>0:
-                    connData.send(str([list(rects), list(texts)]))
+                connData.send(str([list(rects), list(texts)]))
             # The frame is ready and already captured
             #cv2.imshow('video', frame)
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
@@ -180,10 +183,15 @@ def main():
 
 
 def dataReceive():
+    global notEnoughData
+    totalData = 0
     tempFile = open(videoReceive, "w")
     tempFile.close() #Delete old video
     while not exitCode:
         data = conn.recv(2**15)
+        totalData += len(data)
+        if totalData >= 10000 :
+            notEnoughData = False
         tempFile = open(videoReceive,"ab")
         #print("Heyo here's some data: %d"%len(data))
         tempFile.write(data)
@@ -203,6 +211,7 @@ def dataSend():
             time.sleep(.1)
 
     for line in outp:
+        print("Sending data")
         #outp is a fifo, so this will continue to go until the program is exited
         if exitCode:break
         connVideo.send(line)
