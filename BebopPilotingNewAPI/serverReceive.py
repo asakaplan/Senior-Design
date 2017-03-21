@@ -65,12 +65,12 @@ def main():
         rects = []
         texts = []
 
-        os.mkfifo(videoReceive)
+        #os.mkfifo(videoReceive)
         threading.Thread(target=dataDataReceive).start()
         threading.Thread(target=dataVideoReceive).start()
         while notEnoughData:
             print("Waiting for more data")
-            time.sleep(.1)
+            time.sleep(.5)
         cap = cv2.VideoCapture(videoReceive)
         while not cap.isOpened():
             cap = cv2.VideoCapture(videoReceive)
@@ -85,7 +85,7 @@ def main():
             # Capture frame-by-frame
             flag, frame = cap.read()
             if not flag:
-                print "Frame not ready"
+                print("Frame not ready")
                 continue
             for rect in rects:
                 cv2.rectangle(frame,*(rect))
@@ -105,7 +105,7 @@ def dataDataReceive():
         dataData = socketData.recv(2**10)
         dataString +=dataData
         if dataString.count("]")>=2:
-            print dataString
+            print(dataString)
             ind = dataString.find("]]")
             dataTemp = dataString[:ind+2]
             dataString = dataString[ind+2:]
@@ -113,14 +113,26 @@ def dataDataReceive():
 def dataVideoReceive():
     global notEnoughData
     totalData = 0
-    tempFile = open(videoReceive, "w")
+    tempHeader = ""
     while not exitCode:
+        print("Waiting on header in receive")
         dataVideo = socketVideo.recv(2**15)
-        totalData+=len(dataVideo)
-        print("Current Data is %d"%totalData)
-        if totalData>=10000:
+        tempHeader+=dataVideo
+        if len(tempHeader)>1000:
             notEnoughData=False
+            break
+    
+    tempFile = open(videoReceive, "wb")
+    tempFile.write(tempHeader)
+    print ("Write header")
+    tempFile.close()
+    
+    while not exitCode:
+        dataVideo = socketVideo.recv(2**15)        
+        tempFile = open(videoReceive, "ab")
         tempFile.write(dataVideo)
+        tempFile.close()
+        
     tempFile.close()
 if __name__ == '__main__':
     try:
