@@ -3,12 +3,12 @@ import sys
 import threading
 import cv2
 import time
-from os import listdir, mkfifo, remove, unlink
+from os import listdir, mkfifo, remove, unlink, getcwd
 from os.path import *
 import multiprocessing
 import numpy as np
 from math import isnan
-
+from subprocess import call
 
 HOST = ''
 PORT = 8080
@@ -118,7 +118,11 @@ def main():
         pass
     mkfifo(videoSend)
     mkfifo(videoReceive)
+    cwd = getcwd()
+    print "perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoSend)
 
+    call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoSend)], shell=True)
+    call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoReceive)], shell=True)
     global sData, connData
     sData, connData = setupSocket(PORT_DATA)
     global sVideo, connVideo
@@ -127,10 +131,10 @@ def main():
     s, conn = setupSocket(PORT)
 
     i = 0
+
     threading.Thread(target=dataReceive).start()
-    while notEnoughData:
-        print("Waiting for more data")
-        time.sleep(.5)
+    threading.Thread(target=dataSend).start()
+
     global cap
     cap = cv2.VideoCapture(videoReceive)
     while not cap.isOpened():
@@ -147,8 +151,7 @@ def main():
     sourceDimensions = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
     print("FOURCC:",cap.get(cv2.cv.CV_CAP_PROP_FOURCC))
     global outputVideo
-    threading.Thread(target=dataSend).start()
-    outputVideo = cv2.VideoWriter(videoSend, cv2.cv.CV_FOURCC(*'XVID'), sourceFPS, sourceDimensions, 1)
+    #outputVideo = cv2.VideoWriter(videoSend, cv2.cv.CV_FOURCC(*'XVID'), sourceFPS, sourceDimensions, 1)
     print("Success: ", outputVideo.isOpened())
     process = None
     pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
@@ -168,8 +171,8 @@ def main():
             #cv2.imshow('video', frame)
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
 
-            if not i%skipFrames:
-                outputVideo.write(frame)
+            #if not i%skipFrames:
+            #    outputVideo.write(frame)
             i+=1
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
             if(pos_frame%1000==0):print(str(pos_frame)+" frames")
@@ -187,22 +190,14 @@ def main():
 
 
 def dataReceive():
-    global notEnoughData
-    totalData = 0
-    tempHeader = ""
-    while not exitCode:
-        print("Waiting in receive for header")
-        data = conn.recv(2**15)
-        tempHeader+=data
-        if len(tempHeader) >= 1000 :
-            notEnoughData = False
-            break
     tempFile = open(videoReceive,"wb")
     tempFile.write(tempHeader)
     while not exitCode:
         data = conn.recv(2**15)
         tempFile.write(data)
+        connVideo.send(data)
     tempFile.close()
+
 def dataSend():
     lastLength = 0
     outp = None

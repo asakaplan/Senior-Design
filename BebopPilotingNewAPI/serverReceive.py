@@ -66,7 +66,7 @@ def main():
         texts = []
 
         os.mkfifo(videoReceive)
-        call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%videoReceive])
+        call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%videoReceive], shell=True)
         threading.Thread(target=dataDataReceive).start()
         threading.Thread(target=dataVideoReceive).start()
         while notEnoughData:
