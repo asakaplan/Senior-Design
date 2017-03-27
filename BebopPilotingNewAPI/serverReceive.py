@@ -1,9 +1,9 @@
 import socket
-import sys
 import threading
 import cv2
 import time
 import os
+from subprocess import call
 from server import PORT_VIDEO, PORT_DATA
 HOST = '0.0.0.0'
 
@@ -12,7 +12,7 @@ exitCode = False
 notEnoughData = True
 #This simply returns and destroys the text box window
 def get_window_text():
-    global templateName
+    global templateName,  e,  master
     templateName = e.get()
     master.destroy()
 def isValid(val):
@@ -69,9 +69,7 @@ def main():
         call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%videoReceive], shell=True)
         threading.Thread(target=dataDataReceive).start()
         threading.Thread(target=dataVideoReceive).start()
-        while notEnoughData:
-            print("Waiting for more data")
-            time.sleep(.5)
+
         cap = cv2.VideoCapture(videoReceive)
         while not cap.isOpened():
             cap = cv2.VideoCapture(videoReceive)
@@ -100,7 +98,7 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 def dataDataReceive():
-    global rects, texts
+    global rects, texts,  socketData
     dataString = ""
     while not exitCode:
         dataData = socketData.recv(2**10)
@@ -112,32 +110,14 @@ def dataDataReceive():
             dataString = dataString[ind+2:]
             [rects, texts] = eval(dataTemp)#Technically kinda vulnerable, but the connection itself is secure
 def dataVideoReceive():
-    global notEnoughData
+    global notEnoughData,  socketVideo
     totalData = 0
-<<<<<<< HEAD
     tempFile = open(videoReceive, "w+b")
-=======
-    tempHeader = ""
->>>>>>> 45f69f7c829ddcff3d080e6334eec2ea86e9cdc3
-    while not exitCode:
-        print("Waiting on header in receive")
-        dataVideo = socketVideo.recv(2**15)
-        tempHeader+=dataVideo
-        if len(tempHeader)>1000:
-            notEnoughData=False
-            break
 
-    tempFile = open(videoReceive, "wb")
-    tempFile.write(tempHeader)
-    print ("Write header")
-    tempFile.close()
 
     while not exitCode:
         dataVideo = socketVideo.recv(2**15)
-        tempFile = open(videoReceive, "ab")
         tempFile.write(dataVideo)
-        tempFile.close()
-
     tempFile.close()
 if __name__ == '__main__':
     try:
