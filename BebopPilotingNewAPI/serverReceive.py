@@ -3,13 +3,16 @@ import threading
 import cv2
 import time
 import os
+import pickle
 from subprocess import call
 from server import PORT_VIDEO, PORT_DATA
 HOST = '0.0.0.0'
 
 videoReceive = "PLEASEWORK.avi"
+boundary = "BUFFERLSJAOFASIHDIAOJA8932yq9fjoeq9"
 exitCode = False
 notEnoughData = True
+needsUpdating = True
 #This simply returns and destroys the text box window
 def get_window_text():
     global templateName,  e,  master
@@ -39,7 +42,7 @@ def connectPort(port):
 
 #Mouse callback function to get position and click event
 def get_mouse_position_onclick(event, ix, iy, flags, param):
-    global rects, curFrame, templates, faceFiles
+    global rects, curFrame, templates, faceFiles,  socketData
     if event == cv2.EVENT_LBUTTONDOWN:
         for idx, ((x,y),(x2,y2),_,__) in enumerate(rects):
             if (x < ix) and (x2> ix) and (y < iy) and (y2 > iy):
@@ -49,6 +52,8 @@ def get_mouse_position_onclick(event, ix, iy, flags, param):
                 cv2.imwrite('faces/' + templateName + '.png', curFrame[y:y2,x:x2])
                 templates= [cv2.imread('faces/' + templateName + '.png', 0)]+templates
                 faceFiles =[templateName+".png"]+faceFiles
+                socketData.write(pickle.dumps(curFrame) +  boundary +  pickle.dumps(templateName) +  boundary)
+                
                 break
 def main():
         try:
@@ -56,7 +61,7 @@ def main():
         except Exception:
            pass
 
-        global socketVideo, socketData, connVideo, connData
+        global socketVideo, socketData, connVideo, connData,  curFrame
 
         socketData = connectPort(PORT_DATA)
         time.sleep(.5)
@@ -86,6 +91,9 @@ def main():
             if not flag:
                 print("Frame not ready")
                 continue
+            if needsUpdating:
+                needsUpdating = False
+                curFrame = frame
             for rect in rects:
                 cv2.rectangle(frame,*(rect))
 
@@ -104,6 +112,7 @@ def dataDataReceive():
         dataData = socketData.recv(2**10)
         dataString +=dataData
         if dataString.count("]")>=2:
+            needsUpdating = True
             print(dataString)
             ind = dataString.find("]]")
             dataTemp = dataString[:ind+2]
