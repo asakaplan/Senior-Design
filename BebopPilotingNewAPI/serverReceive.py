@@ -5,11 +5,8 @@ import time
 import os
 import pickle
 from subprocess import call
-from server import PORT_VIDEO, PORT_DATA
-HOST = '0.0.0.0'
+from constants import *
 
-videoReceive = "PLEASEWORK.avi"
-boundary = "BUFFERLSJAOFASIHDIAOJA8932yq9fjoeq9"
 exitCode = False
 notEnoughData = True
 needsUpdating = True
@@ -53,7 +50,7 @@ def get_mouse_position_onclick(event, ix, iy, flags, param):
                 templates= [cv2.imread('faces/' + templateName + '.png', 0)]+templates
                 faceFiles =[templateName+".png"]+faceFiles
                 socketData.write(pickle.dumps(curFrame) +  boundary +  pickle.dumps(templateName) +  boundary)
-                
+
                 break
 def main():
         try:

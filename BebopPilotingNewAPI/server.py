@@ -7,13 +7,12 @@ from os import listdir, mkfifo, remove, unlink, getcwd
 from os.path import *
 import multiprocessing
 import numpy as np
+import pickle
 from math import isnan
 from subprocess import call
-HOST = ''
-PORT = 8080
-PORT_VIDEO = 8001
-PORT_DATA = 8002
-threshold = 90
+from serverReceive import boundary
+from constants import *
+
 
 videoSend = "videoOut.avi"
 videoReceive = "videoTemp.avi"
@@ -21,7 +20,6 @@ faceDir = "faces"
 exitCode = False
 notEnoughData = True
 faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-sizes = [80, 100, 120, 140, 160, 180, 200, 220, 240, 260]
 
 
 def setupSocket(port):
@@ -101,6 +99,22 @@ def setupFiles():
 
     call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoSend)], shell=True)
     call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoReceive)], shell=True)
+def loadData():
+    global faceFiles, templates
+
+    faceFiles = [f for f in listdir(faceDir) if isfile(join(faceDir, f))]
+    templates = [cv2.imread(join(faceDir, face), 0) for face in faceFiles]
+
+    for i in range(len(faceFiles)-1,-1,-1):
+        if templates[i]==None or not templates[i].size:
+            templates.pop(i)
+            faceFiles.pop(i)
+
+def trainNetwork():
+    global recognizer, templates, faceFiles
+
+    recognizer = cv2.createLBPHFaceRecognizer()
+    recognizer.train(templates, np.array(range(len(faceFiles))))
 
 def main():
     global rects, texts, templates, faceFiles
@@ -122,8 +136,9 @@ def main():
     s, conn = setupSocket(PORT)
 
 
+    threading.Thread(target=videoDataReceive).start()
+    threading.Thread(target=videoDataSend).start()
     threading.Thread(target=dataReceive).start()
-    threading.Thread(target=dataSend).start()
 
     global cap
     cap = cv2.VideoCapture(videoReceive)
@@ -139,9 +154,8 @@ def main():
     sourceFPS = 30
     sourceDimensions = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
     print("FOURCC:",cap.get(cv2.cv.CV_CAP_PROP_FOURCC))
-
-    recognizer = cv2.createLBPHFaceRecognizer()
-    recognizer.train(templates, np.array(range(len(faceFiles))))
+    loadData()
+    trainNetwork()
     while True:
         flag, frame = cap.read()
         if flag:
@@ -155,9 +169,31 @@ def main():
         if cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES) == cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT):
             break
 
-
-
 def dataReceive():
+    tempBuffer = ""
+    while not exitCode:
+        data = connData.recv(2**15)
+        tempBuffer+=data
+        while boundary in tempBuffer:
+            ind = tempBuffer.index(boundary)
+            rawPart = tempBuffer[:ind]
+            tempBuffer = tempBuffer[ind+len(buffer):]
+            if not firstPart:
+                firstPart = rawPart
+            elif not secondPart:
+                secondPart = rawPart
+            else:
+                #Process it
+                img = pickle.loads(firstPart)
+                fileName = pickle.loads(secondPart)
+                cv2.imwrite('faces/' + fileName + '.png', img)
+                firstPart,secondPart = None, None
+                loadData() #Remove this call and just add it later
+                trainNetwork()
+
+    tempFile.close()
+
+def videoDataReceive():
     tempFile = open(videoReceive,"wb")
     while not exitCode:
         data = conn.recv(2**15)
@@ -165,7 +201,7 @@ def dataReceive():
         connVideo.send(data)
     tempFile.close()
 
-def dataSend():
+def videoDataSend():
     lastLength = 0
     outp = None
     while not exitCode:
