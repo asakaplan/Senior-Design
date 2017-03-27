@@ -65,7 +65,8 @@ def main():
         rects = []
         texts = []
 
-        #os.mkfifo(videoReceive)
+        os.mkfifo(videoReceive)
+        call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%videoReceive])
         threading.Thread(target=dataDataReceive).start()
         threading.Thread(target=dataVideoReceive).start()
         while notEnoughData:
@@ -125,18 +126,18 @@ def dataVideoReceive():
         if len(tempHeader)>1000:
             notEnoughData=False
             break
-    
+
     tempFile = open(videoReceive, "wb")
     tempFile.write(tempHeader)
     print ("Write header")
     tempFile.close()
-    
+
     while not exitCode:
-        dataVideo = socketVideo.recv(2**15)        
+        dataVideo = socketVideo.recv(2**15)
         tempFile = open(videoReceive, "ab")
         tempFile.write(dataVideo)
         tempFile.close()
-        
+
     tempFile.close()
 if __name__ == '__main__':
     try:
