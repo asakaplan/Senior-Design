@@ -3,12 +3,16 @@ import threading
 import cv2
 import time
 import os
+import pickle
 from subprocess import call
+<<<<<<< HEAD
 from server import PORT_VIDEO, PORT_DATA
 import Tkinter as tk
 HOST = '0.0.0.0'
+=======
+from constants import *
+>>>>>>> 1cb798e80f930e719215536d2161f00b4fc2b5b9
 
-videoReceive = "PLEASEWORK.avi"
 exitCode = False
 notEnoughData = True
 needsUpdating = True
@@ -60,7 +64,7 @@ def main():
         except Exception:
            pass
 
-        global socketVideo, socketData, connVideo, connData
+        global socketVideo, socketData, connVideo, connData,  curFrame
 
         socketData = connectPort(PORT_DATA)
         time.sleep(.5)
@@ -96,7 +100,10 @@ def main():
             if needsUpdating:
                 needsUpdating = False
                 curFrame = frame
+<<<<<<< HEAD
 
+=======
+>>>>>>> 1cb798e80f930e719215536d2161f00b4fc2b5b9
             for rect in rects:
                 cv2.rectangle(frame,*(rect))
 
