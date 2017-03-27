@@ -5,6 +5,7 @@ import time
 import os
 from subprocess import call
 from server import PORT_VIDEO, PORT_DATA
+import Tkinter as tk
 HOST = '0.0.0.0'
 
 videoReceive = "PLEASEWORK.avi"
@@ -64,10 +65,13 @@ def main():
         socketData = connectPort(PORT_DATA)
         time.sleep(.5)
         socketVideo = connectPort(PORT_VIDEO)
-        global ix, iy, ievent, master, templateName, rects, texts, curFrame, templates, faceFiles, curFrame
+        global ix, iy, ievent, master, templateName, rects, texts, curFrame, templates, faceFiles, curFrame, needsUpdating
         rects = []
         texts = []
+        cv2.namedWindow('Video')
+        cv2.namedWindow('Recognized')
 
+        cv2.setMouseCallback('Video', get_mouse_position_onclick)
         os.mkfifo(videoReceive)
         call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%videoReceive], shell=True)
         threading.Thread(target=dataDataReceive).start()
@@ -99,14 +103,13 @@ def main():
             for text in texts:
                 cv2.putText(frame,*(text))
             # Display the resulting frame
-            print "Displaying"
             cv2.imshow('Video', frame)
 
             #Quit when q is pressed
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 def dataDataReceive():
-    global rects, texts,  socketData
+    global rects, texts,  socketData, needsUpdating
     dataString = ""
     while not exitCode:
         dataData = socketData.recv(2**10)
