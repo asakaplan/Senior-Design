@@ -61,7 +61,7 @@ def detect(frame, faceFiles, templates, sizes, threshold, texts, rects):
                 # NOTE: its img[y: y + h, x: x + w]
                 rectsTemp.append((point, (point[0] + size, point[1] + size), (0, 0, 255), 4))
                 personname = faceFiles[index][:-4]
-                textTemp.append((personname, (point[0], point[1]), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.LINE_AA))
+                textTemp.append((personname, (point[0], point[1]), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.CV_AA))
                 xTemp = point[0]
                 yTemp = point[1]
                 cv2.imwrite('detections/detection_' + str(point[0] - point[0] % 100) + '_' + str(point[1] - point[1] % 100) + '_' + faceFiles[index], detection)
@@ -130,7 +130,7 @@ def main():
     threading.Thread(target=dataReceive).start()
     while notEnoughData:
         print("Waiting for more data")
-        time.sleep(.1)
+        time.sleep(.5)
     global cap
     cap = cv2.VideoCapture(videoReceive)
     while not cap.isOpened():
@@ -152,6 +152,8 @@ def main():
     print("Success: ", outputVideo.isOpened())
     process = None
     pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
+    i=0
+    skipFrames = 10
     while True:
         flag, frame = cap.read()
         if flag:
@@ -166,7 +168,9 @@ def main():
             #cv2.imshow('video', frame)
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
 
-            outputVideo.write(frame)
+            if not i%skipFrames:
+                outputVideo.write(frame)
+            i+=1
             pos_frame = cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)
             if(pos_frame%1000==0):print(str(pos_frame)+" frames")
         else:
@@ -185,20 +189,20 @@ def main():
 def dataReceive():
     global notEnoughData
     totalData = 0
-    tempFile = open(videoReceive, "w")
-    tempFile.close() #Delete old video
+    tempHeader = ""
+    while not exitCode:
+        print("Waiting in receive for header")
+        data = conn.recv(2**15)
+        tempHeader+=data
+        if len(tempHeader) >= 1000 :
+            notEnoughData = False
+            break
+    tempFile = open(videoReceive,"wb")
+    tempFile.write(tempHeader)
     while not exitCode:
         data = conn.recv(2**15)
-        totalData += len(data)
-        if totalData >= 10000 :
-            notEnoughData = False
-        tempFile = open(videoReceive,"ab")
-        #print("Heyo here's some data: %d"%len(data))
         tempFile.write(data)
-        tempFile.close()
-        #Process data
-        #conn.send(data)
-
+    tempFile.close()
 def dataSend():
     lastLength = 0
     outp = None
@@ -211,7 +215,7 @@ def dataSend():
             time.sleep(.1)
 
     for line in outp:
-        print("Sending data")
+        #print("Sending data")
         #outp is a fifo, so this will continue to go until the program is exited
         if exitCode:break
         connVideo.send(line)

@@ -65,7 +65,7 @@ def main():
         rects = []
         texts = []
 
-        os.mkfifo(videoReceive)
+        #os.mkfifo(videoReceive)
         threading.Thread(target=dataDataReceive).start()
         threading.Thread(target=dataVideoReceive).start()
         while notEnoughData:
@@ -113,7 +113,7 @@ def dataDataReceive():
 def dataVideoReceive():
     global notEnoughData
     totalData = 0
-    tempFile = open(videoReceive, "w")
+    tempFile = open(videoReceive, "w+b")
     while not exitCode:
         dataVideo = socketVideo.recv(2**15)
         totalData+=len(dataVideo)
