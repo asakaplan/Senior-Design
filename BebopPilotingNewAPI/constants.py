@@ -6,4 +6,4 @@ boundary = "BUFFERLSJAOFASIHDIAOJA8932yq9fjoeq9"
 PORT = 8080
 PORT_VIDEO = 8001
 PORT_DATA = 8002
-threshold = 90
+threshold = 0

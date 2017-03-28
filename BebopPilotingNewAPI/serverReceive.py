@@ -5,13 +5,8 @@ import time
 import os
 import pickle
 from subprocess import call
-<<<<<<< HEAD
-from server import PORT_VIDEO, PORT_DATA
 import Tkinter as tk
-HOST = '0.0.0.0'
-=======
 from constants import *
->>>>>>> 1cb798e80f930e719215536d2161f00b4fc2b5b9
 
 exitCode = False
 notEnoughData = True
@@ -45,17 +40,16 @@ def connectPort(port):
 
 #Mouse callback function to get position and click event
 def get_mouse_position_onclick(event, ix, iy, flags, param):
-    global rects, curFrame, templates, faceFiles,  socketData
+    global rects, curFrame, socketData
     if event == cv2.EVENT_LBUTTONDOWN:
         for idx, ((x,y),(x2,y2),_,__) in enumerate(rects):
             if (x < ix) and (x2> ix) and (y < iy) and (y2 > iy):
                 cv2.imshow('Recognized', curFrame[y:y2,x:x2])
                 ix, iy = -1, -1
                 create_new_text_window()
-                cv2.imwrite('faces/' + templateName + '.png', curFrame[y:y2,x:x2])
-                templates= [cv2.imread('faces/' + templateName + '.png', 0)]+templates
-                faceFiles =[templateName+".png"]+faceFiles
-                socketData.write(pickle.dumps(curFrame) +  boundary +  pickle.dumps(templateName) +  boundary)
+                print pickle.dumps(templateName) +  boundary
+                print len(pickle.dumps(curFrame) +  boundary +  pickle.dumps(templateName) +  boundary)
+                socketData.send(pickle.dumps(curFrame[y:y2,x:x2]) +  boundary +  pickle.dumps(templateName) +  boundary)
 
                 break
 def main():
@@ -100,10 +94,7 @@ def main():
             if needsUpdating:
                 needsUpdating = False
                 curFrame = frame
-<<<<<<< HEAD
 
-=======
->>>>>>> 1cb798e80f930e719215536d2161f00b4fc2b5b9
             for rect in rects:
                 cv2.rectangle(frame,*(rect))
 
@@ -123,7 +114,6 @@ def dataDataReceive():
         dataString +=dataData
         if dataString.count("]")>=2:
             needsUpdating = True
-            print(dataString)
             ind = dataString.find("]]")
             dataTemp = dataString[:ind+2]
             dataString = dataString[ind+2:]
@@ -141,11 +131,13 @@ def dataVideoReceive():
 if __name__ == '__main__':
     try:
         main()
-    except KeyboardInterrupt:
-        print("In Interrupt")
-        exitCode = True
-        os.unlink(videoSend)
-        s.close()
-        cv2.destroyAllWindows()
-        print("End of interrupt")
-        raise
+    except:
+        try:
+            print("In Interrupt")
+            exitCode = True
+            os.unlink(videoSend)
+            s.close()
+            cv2.destroyAllWindows()
+            print("End of interrupt")
+        finally:
+            raise

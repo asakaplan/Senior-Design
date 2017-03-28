@@ -21,6 +21,7 @@ exitCode = False
 notEnoughData = True
 faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
+recognizerMutex = False
 
 def setupSocket(port):
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -42,6 +43,7 @@ def isValid(val):
     return bool(val) and not isnan(val)
 
 def detect(frame):
+    global recognizerMutex
     xTemp = 0
     yTemp = 0
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -61,18 +63,21 @@ def detect(frame):
         if xTemp < 1 or (((x < xTemp - 25) or (x + w > xTemp + 250)) and ((y < yTemp - 25) or (y + h > yTemp + 250))):
             #rectsTemp.append(((x, y), (x+w, y+h), (255, 255, 255), 1))
             possibleFace = [frame[y:y + h, x:x + w], (x,y),(x+w,y+h)]
-            cv2.imwrite('templates/template_' + str(x - x%100) + '_' + str(y - y%100) + '.png', possibleFace[0])
+            #cv2.imwrite('templates/template_' + str(x - x%100) + '_' + str(y - y%100) + '.png', possibleFace[0])
             possibleFaces.append(possibleFace)
+    while recognizerMutex:
+        print "Waiting on mutex in detect"
+        time.sleep(.05)
+    recognizerMutex = True
     for face, fromCoord, toCoord in possibleFaces:
         faceGrey = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
         predicted, conf = recognizer.predict(faceGrey)
-        print conf
         if conf>threshold:
             rectsTemp.append((fromCoord,toCoord, (0,0,255),1))
             textTemp.append((faceFiles[predicted], fromCoord, cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.CV_AA))
         else:
             rectsTemp.append((fromCoord,toCoord, (255,255,255),1))
-
+    recognizerMutex = False
     while rects:
         rects.pop()#clear the list
     for r in rectsTemp:
@@ -109,13 +114,33 @@ def loadData():
         if templates[i]==None or not templates[i].size:
             templates.pop(i)
             faceFiles.pop(i)
+    print faceFiles, templates
 
 def trainNetwork():
-    global recognizer, templates, faceFiles
-
+    global recognizer, templates, faceFiles, recognizerMutex
+    while recognizerMutex:
+        print "Waiting on mutex in train"
+        time.sleep(.05)
+    recognizerMutex = True
     recognizer = cv2.createLBPHFaceRecognizer()
-    recognizer.train(templates, np.array(range(len(faceFiles))))
+    nameMap = {}
 
+    for ind, fileThing in enumerate(faceFiles):
+        if " " in fileThing:continue
+        inda = fileThing.index(".")
+        baseName = fileThing[:inda]
+        nameMap[baseName]=ind
+    res = [0 for i in range(len(faceFiles))]
+    for ind, fileThing in enumerate(faceFiles):
+        if " " not in fileThing:
+            res[ind]=ind
+            continue
+        inda = fileThing.index(" ")
+        baseName = fileThing[:inda]
+        res[ind]=nameMap[baseName]
+        #check for errors
+    recognizer.train(templates, np.array(res))
+    recognizerMutex = False
 def main():
     global rects, texts, templates, faceFiles
     texts, rects = [], []
@@ -171,18 +196,22 @@ def main():
 
 def dataReceive():
     tempBuffer = ""
+    firstPart, secondPart = None, None
     while not exitCode:
         data = connData.recv(2**15)
         tempBuffer+=data
-        while boundary in tempBuffer:
+        while boundary in tempBuffer and not exitCode:
             ind = tempBuffer.index(boundary)
             rawPart = tempBuffer[:ind]
-            tempBuffer = tempBuffer[ind+len(buffer):]
+
+            tempBuffer = tempBuffer[ind+len(boundary):]
             if not firstPart:
+                print "In first part"
                 firstPart = rawPart
-            elif not secondPart:
-                secondPart = rawPart
             else:
+                print "In second part"
+                secondPart = rawPart
+
                 #Process it
                 img = pickle.loads(firstPart)
                 fileName = pickle.loads(secondPart)
@@ -223,12 +252,14 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print("In Interrupt")
-        exitCode = True
-        unlink(videoSend)
-        s.close()
-        cap.release()
-        outputVideo.release()
-        cv2.destroyAllWindows()
-        print("End of interrupt")
-        raise
+        try:
+            print("In Interrupt")
+            exitCode = True
+            unlink(videoSend)
+            s.close()
+            cap.release()
+            outputVideo.release()
+            cv2.destroyAllWindows()
+            print("End of interrupt")
+        finally:
+            raise
