@@ -49,7 +49,7 @@ def get_mouse_position_onclick(event, ix, iy, flags, param):
                 create_new_text_window()
                 print pickle.dumps(templateName) +  boundary
                 print len(pickle.dumps(curFrame) +  boundary +  pickle.dumps(templateName) +  boundary)
-                socketData.send(pickle.dumps(curFrame[y:y2,x:x2]) +  boundary +  pickle.dumps(templateName) +  boundary)
+                socketData.send(pickle.dumps(cv2.resize(curFrame[y:y2,x:x2], (96, 96))) +  boundary +  pickle.dumps(templateName) +  boundary)
 
                 break
 def main():

@@ -14,7 +14,7 @@ from serverReceive import boundary
 from constants import *
 import Tkinter as tk
 from os import listdir
-from os.path import isfile, join, dirname, realpath
+from os.path import isfile, join, dirname, realpath, isdir
 import glob
 import multiprocessing
 import threading
@@ -279,7 +279,11 @@ def dataReceive():
                 img = pickle.loads(firstPart)
                 fileName = pickle.loads(secondPart)
                 dirname, imagenum = fileName.split(" ")
+                if not os.path.exists(dirname):
+                    os.makedir(dirname)
                 cv2.imwrite('faces/' + dirname + '/' + imagenum + '.png', img)
+
+
                 firstPart,secondPart = None, None
                 trainNetwork()
 
