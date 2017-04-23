@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# MODIFIED from original apache license (2017):
 #
 # Example to classify faces.
 # Brandon Amos
@@ -28,32 +29,25 @@ import os
 import pickle
 
 from operator import itemgetter
-
 import numpy as np
-np.set_printoptions(precision=2)
 import pandas as pd
-
 import openface
-
-from sklearn.pipeline import Pipeline
-from sklearn.lda import LDA
 from sklearn.preprocessing import LabelEncoder
 from sklearn.svm import SVC
-from sklearn.grid_search import GridSearchCV
-from sklearn.mixture import GMM
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.naive_bayes import GaussianNB
 
+np.set_printoptions(precision=2)
 fileDir = os.path.dirname(os.path.realpath(__file__))
-modelDir = os.path.join(fileDir, '..', 'models')
+modelDir = os.path.join(fileDir, 'models')
 dlibModelDir = os.path.join(modelDir, 'dlib')
 openfaceModelDir = os.path.join(modelDir, 'openface')
 
+
+dlibFacePredictor = os.path.join(dlibModelDir,"shape_predictor_68_face_landmarks.dat")
+networkModel = os.path.join(openfaceModelDir,'nn4.small2.v1.t7')
+
+imgDim = 96
+
 def train(args):
-    dlibFacePredictor = os.path.join(dlibModelDir,"shape_predictor_68_face_landmarks.dat")
-    networkModel = os.path.join(openfaceModelDir,'nn4.small2.v1.t7')
-    imgDim = 96
-    ldaDim = -1
     workDir = "training/"
     images = "faces/"
     cuda = True
