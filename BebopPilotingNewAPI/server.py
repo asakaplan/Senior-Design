@@ -19,7 +19,7 @@ import glob
 import multiprocessing
 import threading
 import argparse
-
+import classifier
 np.set_printoptions(precision=2)
 
 import openface
@@ -36,29 +36,9 @@ fileDir = dirname(realpath(__file__))
 modelDir = join(fileDir, 'models')
 dlibModelDir = join(modelDir, 'dlib')
 openfaceModelDir = join(modelDir, 'openface')
-parser = argparse.ArgumentParser()
 
-parser.add_argument('--dlibFacePredictor', type=str, help="Path to dlib's face predictor.",
-                    default=join(dlibModelDir, "shape_predictor_68_face_landmarks.dat"))
-parser.add_argument('--networkModel', type=str, help="Path to Torch network model.",
-                    default=join(openfaceModelDir, 'nn4.small2.v1.t7'))
-parser.add_argument('--imgDim', type=int,
-                    help="Default image dimension.", default=96)
-parser.add_argument('--verbose', action='store_true')
-
-args = parser.parse_args()
-
-if args.verbose:
-    print("Argument parsing and loading libraries took {} seconds.".format(
-        time.time() - start))
-
-start = time.time()
-align = openface.AlignDlib(args.dlibFacePredictor)
-net = openface.TorchNeuralNet(args.networkModel, args.imgDim)
-if args.verbose:
-    print("Loading the dlib and OpenFace models took {} seconds.".format(
-        time.time() - start))
-
+align = openface.AlignDlib(classifier.dlibFacePredictor)
+net = openface.TorchNeuralNet(classifier.networkModel, classifier.imgDim)
 
 faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
@@ -83,7 +63,8 @@ def isValid(val):
     return bool(val) and not isnan(val)
 
 def infer(reps):
-    global le, clf
+    with open(classifier.classifierFile, 'r') as f:
+        (le, clf) = pickle.load(f)
 
     persons = []
     confidences = []
@@ -116,11 +97,9 @@ def detectLoop():
             print "Waiting on frame"
 def detect(frame):
     global recognizerMutex
-    xTemp = 0
-    yTemp = 0
+    xTemp, yTemp = 0, 0
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    rectsTemp = []
-    textTemp = []
+    rectsTemp, textTemp = [], []
 
     faces = faceCascade.detectMultiScale(
         gray,
@@ -129,39 +108,28 @@ def detect(frame):
         minSize=(30, 30),
         flags=cv2.CASCADE_SCALE_IMAGE
     )
-    if args.verbose:
-        print("  + Original size: {}".format(rgbImg.shape))
-    if args.verbose:
-        print("Loading the image took {} seconds.".format(time.time() - start))
-
 
     rgbImg = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    # Get the largest face bounding box
-    # bb = align.getLargestFaceBoundingBox(rgbImg) #Bounding box
 
     # Get all bounding box es
     bb = align.getAllFaceBoundingBoxes(rgbImg)
 
     if bb is None:
-        # raise Exception("Unable to find a face: {}".format(imgPath))
-        return None
-    if args.verbose:
-        print("Face detection took {} seconds.".format(time.time() - start))
+        return
+
     alignedFaces = []
+
     for box in bb:
         rectsTemp.append(((box.left(),box.top()),(box.right(),box.bottom()), (255,255,255),1))
         alignedFaces.append(
             align.align(
-                args.imgDim,
+                classifier.imgDim,
                 rgbImg,
                 box,
                 landmarkIndices=openface.AlignDlib.OUTER_EYES_AND_NOSE))
 
     if alignedFaces is None:
         raise Exception("Unable to align the frame")
-    if args.verbose:
-        print("Alignment took {} seconds.".format(time.time() - start))
 
     start = time.time()
 
@@ -169,30 +137,30 @@ def detect(frame):
     for alignedFace in alignedFaces:
         reps.append(net.forward(alignedFace))
 
-    print("Reps:", reps)
+    while recognizerMutex:
+        print "Waiting on mutex in detect"
+        time.sleep(.05)
+
+    recognizerMutex = True
     persons, confs = infer(reps)
-    print persons, confs
-    #
-    # while recognizerMutex:
-    #     print "Waiting on mutex in detect"
-    #     time.sleep(.05)
-    # recognizerMutex = True
-    possibleFaces = []
-    for face, fromCoord, toCoord in possibleFaces:
-        faceGrey = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-        predicted, conf = recognizer.predict(faceGrey)
-        if conf>threshold:
-            rectsTemp.append((fromCoord,toCoord, (0,0,255),1))
-            textTemp.append((faceFiles[predicted], fromCoord, cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.CV_AA))
-        else:
-            rectsTemp.append((fromCoord,toCoord, (255,255,255),1))
     recognizerMutex = False
+
+    print persons, confs
+
+    possibleFaces = []
+    #
+    # rectsTemp.append((fromCoord,toCoord, (0,0,255),1))
+    # textTemp.append((faceFiles[predicted], fromCoord, cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.CV_AA))
+
     while rects:
         rects.pop()#clear the list
+
     for r in rectsTemp:
         rects.append(r)
+
     while texts:
         texts.pop()#clear the list
+
     for t in textTemp:
         texts.append(t)
 
@@ -209,10 +177,9 @@ def setupFiles():
     mkfifo(videoSend)
     mkfifo(videoReceive)
     cwd = getcwd()
-    print "perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoSend)
-
     call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoSend)], shell=True)
     call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoReceive)], shell=True)
+
 def loadData():
     global faceFiles, templates
 
@@ -231,25 +198,9 @@ def trainNetwork():
         print "Waiting on mutex in train"
         time.sleep(.05)
     recognizerMutex = True
-    recognizer = cv2.createLBPHFaceRecognizer()
-    nameMap = {}
-
-    for ind, fileThing in enumerate(faceFiles):
-        if " " in fileThing:continue
-        inda = fileThing.index(".")
-        baseName = fileThing[:inda]
-        nameMap[baseName]=ind
-    res = [0 for i in range(len(faceFiles))]
-    for ind, fileThing in enumerate(faceFiles):
-        if " " not in fileThing:
-            res[ind]=ind
-            continue
-        inda = fileThing.index(" ")
-        baseName = fileThing[:inda]
-        res[ind]=nameMap[baseName]
-        #check for errors
-    recognizer.train(templates, np.array(res))
+    classifier.train()
     recognizerMutex = False
+
 def main():
     global rects, texts, templates, faceFiles, frame
     frame = None
@@ -330,7 +281,6 @@ def dataReceive():
                 dirname, imagenum = fileName.split(" ")
                 cv2.imwrite('faces/' + dirname + '/' + imagenum + '.png', img)
                 firstPart,secondPart = None, None
-                loadData() #Remove this call and just add it later
                 trainNetwork()
 
     tempFile.close()
