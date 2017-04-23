@@ -327,7 +327,8 @@ def dataReceive():
                 #Process it
                 img = pickle.loads(firstPart)
                 fileName = pickle.loads(secondPart)
-                cv2.imwrite('faces/' + fileName + '.png', img)
+                dirname, imagenum = fileName.split(" ")
+                cv2.imwrite('faces/' + dirname + '/' + imagenum + '.png', img)
                 firstPart,secondPart = None, None
                 loadData() #Remove this call and just add it later
                 trainNetwork()
