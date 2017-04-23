@@ -12,7 +12,17 @@ from math import isnan
 from subprocess import call
 from serverReceive import boundary
 from constants import *
+import Tkinter as tk
+from os import listdir
+from os.path import isfile, join, dirname, realpath
+import glob
+import multiprocessing
+import threading
+import argparse
 
+np.set_printoptions(precision=2)
+
+import openface
 
 videoSend = "videoOut.avi"
 videoReceive = "videoTemp.avi"
@@ -22,6 +32,36 @@ notEnoughData = True
 faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
 recognizerMutex = False
+fileDir = dirname(realpath(__file__))
+modelDir = join(fileDir, 'models')
+dlibModelDir = join(modelDir, 'dlib')
+openfaceModelDir = join(modelDir, 'openface')
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--dlibFacePredictor', type=str, help="Path to dlib's face predictor.",
+                    default=join(dlibModelDir, "shape_predictor_68_face_landmarks.dat"))
+parser.add_argument('--networkModel', type=str, help="Path to Torch network model.",
+                    default=join(openfaceModelDir, 'nn4.small2.v1.t7'))
+parser.add_argument('--imgDim', type=int,
+                    help="Default image dimension.", default=96)
+parser.add_argument('--verbose', action='store_true')
+
+args = parser.parse_args()
+
+if args.verbose:
+    print("Argument parsing and loading libraries took {} seconds.".format(
+        time.time() - start))
+
+start = time.time()
+align = openface.AlignDlib(args.dlibFacePredictor)
+net = openface.TorchNeuralNet(args.networkModel, args.imgDim)
+if args.verbose:
+    print("Loading the dlib and OpenFace models took {} seconds.".format(
+        time.time() - start))
+
+
+faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+
 
 def setupSocket(port):
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -42,6 +82,38 @@ def setupSocket(port):
 def isValid(val):
     return bool(val) and not isnan(val)
 
+def infer(reps):
+    global le, clf
+
+    persons = []
+    confidences = []
+
+    for rep in reps:
+        try:
+            rep = rep.reshape(1, -1)
+        except:
+            print "No Face detected"
+            return (None, None)
+        start = time.time()
+        predictions = clf.predict_proba(rep).ravel()
+        maxI = np.argmax(predictions)
+        persons.append(le.inverse_transform(maxI))
+        confidences.append(predictions[maxI])
+        if isinstance(clf, GMM):
+            dist = np.linalg.norm(rep - clf.means_[maxI])
+            print("  + Distance from the mean: {}".format(dist))
+            pass
+    return (persons, confidences)
+
+def detectLoop():
+    global frame
+    while not exitCode:
+        if frame is not None:
+            print "Detecting"
+            detect(frame)
+            connData.send(str([list(rects), list(texts)]))
+        else:
+            print "Waiting on frame"
 def detect(frame):
     global recognizerMutex
     xTemp = 0
@@ -57,18 +129,55 @@ def detect(frame):
         minSize=(30, 30),
         flags=cv2.CASCADE_SCALE_IMAGE
     )
+    if args.verbose:
+        print("  + Original size: {}".format(rgbImg.shape))
+    if args.verbose:
+        print("Loading the image took {} seconds.".format(time.time() - start))
+
+
+    rgbImg = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Get the largest face bounding box
+    # bb = align.getLargestFaceBoundingBox(rgbImg) #Bounding box
+
+    # Get all bounding box es
+    bb = align.getAllFaceBoundingBoxes(rgbImg)
+
+    if bb is None:
+        # raise Exception("Unable to find a face: {}".format(imgPath))
+        return None
+    if args.verbose:
+        print("Face detection took {} seconds.".format(time.time() - start))
+    alignedFaces = []
+    for box in bb:
+        rectsTemp.append(((box.left(),box.top()),(box.right(),box.bottom()), (255,255,255),1))
+        alignedFaces.append(
+            align.align(
+                args.imgDim,
+                rgbImg,
+                box,
+                landmarkIndices=openface.AlignDlib.OUTER_EYES_AND_NOSE))
+
+    if alignedFaces is None:
+        raise Exception("Unable to align the frame")
+    if args.verbose:
+        print("Alignment took {} seconds.".format(time.time() - start))
+
+    start = time.time()
+
+    reps = []
+    for alignedFace in alignedFaces:
+        reps.append(net.forward(alignedFace))
+
+    print("Reps:", reps)
+    persons, confs = infer(reps)
+    print persons, confs
+    #
+    # while recognizerMutex:
+    #     print "Waiting on mutex in detect"
+    #     time.sleep(.05)
+    # recognizerMutex = True
     possibleFaces = []
-    # Draw a rectangle around the faces
-    for (x, y, w, h) in faces:
-        if xTemp < 1 or (((x < xTemp - 25) or (x + w > xTemp + 250)) and ((y < yTemp - 25) or (y + h > yTemp + 250))):
-            #rectsTemp.append(((x, y), (x+w, y+h), (255, 255, 255), 1))
-            possibleFace = [frame[y:y + h, x:x + w], (x,y),(x+w,y+h)]
-            #cv2.imwrite('templates/template_' + str(x - x%100) + '_' + str(y - y%100) + '.png', possibleFace[0])
-            possibleFaces.append(possibleFace)
-    while recognizerMutex:
-        print "Waiting on mutex in detect"
-        time.sleep(.05)
-    recognizerMutex = True
     for face, fromCoord, toCoord in possibleFaces:
         faceGrey = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
         predicted, conf = recognizer.predict(faceGrey)
@@ -142,7 +251,8 @@ def trainNetwork():
     recognizer.train(templates, np.array(res))
     recognizerMutex = False
 def main():
-    global rects, texts, templates, faceFiles
+    global rects, texts, templates, faceFiles, frame
+    frame = None
     texts, rects = [], []
     faceFiles = [f for f in listdir(faceDir) if isfile(join(faceDir, f))]
 
@@ -181,11 +291,13 @@ def main():
     print("FOURCC:",cap.get(cv2.cv.CV_CAP_PROP_FOURCC))
     loadData()
     trainNetwork()
+
+    threading.Thread(target=detectLoop).start()
+
     while True:
-        flag, frame = cap.read()
+        flag, frameTemp = cap.read()
         if flag:
-            detect(frame)
-            connData.send(str([list(rects), list(texts)]))
+            frame = frameTemp
         else:
             # The next frame is not ready, so we try to read it again
             cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES, pos_frame-1)

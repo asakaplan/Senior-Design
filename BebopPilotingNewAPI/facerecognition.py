@@ -12,7 +12,7 @@ import glob
 import multiprocessing
 import threading
 import argparse
-
+from sklearn.mixture import GMM
 np.set_printoptions(precision=2)
 
 import openface
@@ -92,25 +92,48 @@ def detect():
     inner = 0
     if frame is None:
         raise Exception("Unable to load image: {}".format(imgPath))
-    rgbImg = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    rgbImg = cv2.cvtColor(bgrImg, cv2.COLOR_BGR2RGB)
 
     if args.verbose:
         print("  + Original size: {}".format(rgbImg.shape))
+    if args.verbose:
+        print("Loading the image took {} seconds.".format(time.time() - start))
 
     start = time.time()
-    bb = align.getLargestFaceBoundingBox(rgbImg)
+
+    # Get the largest face bounding box
+    # bb = align.getLargestFaceBoundingBox(rgbImg) #Bounding box
+
+    # Get all bounding boxes
+    bb = align.getAllFaceBoundingBoxes(rgbImg)
+
     if bb is None:
-        raise Exception("Unable to find a face: {}".format(imgPath))
+        # raise Exception("Unable to find a face: {}".format(imgPath))
+        return None
     if args.verbose:
-        print("  + Face detection took {} seconds.".format(time.time() - start))
+        print("Face detection took {} seconds.".format(time.time() - start))
 
     start = time.time()
-    alignedFace = align.align(args.imgDim, rgbImg, bb,
-                              landmarkIndices=openface.AlignDlib.OUTER_EYES_AND_NOSE)
-    if alignedFace is None:
-        raise Exception("Unable to align image: {}".format(imgPath))
+
+    alignedFaces = []
+    for box in bb:
+        alignedFaces.append(
+            align.align(
+                args.imgDim,
+                rgbImg,
+                box,
+                landmarkIndices=openface.AlignDlib.OUTER_EYES_AND_NOSE))
+
+    if alignedFaces is None:
+        raise Exception("Unable to align the frame")
     if args.verbose:
-        print("  + Face alignment took {} seconds.".format(time.time() - start))
+        print("Alignment took {} seconds.".format(time.time() - start))
+
+    start = time.time()
+
+    reps = []
+    for alignedFace in alignedFaces:
+        reps.append(net.forward(alignedFace))
 
     start = time.time()
     rep = net.forward(alignedFace)
@@ -119,7 +142,8 @@ def detect():
         print("Representation:")
         print(rep)
         print("-----\n")
-    return rep
+    print(rep)
+    print(reps)
 
     faces = faceCascade.detectMultiScale(
         gray,
@@ -148,7 +172,37 @@ def detect():
 def keepChecking():
     while not exitCode:
         if frame!=None:detect()
+def infer(img, args):
+    with open(args.classifierModel, 'r') as f:
+        (le, clf) = pickle.load(f)  # le - label and clf - classifer
 
+    reps = getRep(img)
+    persons = []
+    confidences = []
+    for rep in reps:
+        try:
+            rep = rep.reshape(1, -1)
+        except:
+            print "No Face detected"
+            return (None, None)
+        start = time.time()
+        predictions = clf.predict_proba(rep).ravel()
+        # print predictions
+        maxI = np.argmax(predictions)
+        # max2 = np.argsort(predictions)[-3:][::-1][1]
+        persons.append(le.inverse_transform(maxI))
+        # print str(le.inverse_transform(max2)) + ": "+str( predictions [max2])
+        # ^ prints the second prediction
+        confidences.append(predictions[maxI])
+        if args.verbose:
+            print("Prediction took {} seconds.".format(time.time() - start))
+            pass
+        # print("Predict {} with {:.2f} confidence.".format(person, confidence))
+        if isinstance(clf, GMM):
+            dist = np.linalg.norm(rep - clf.means_[maxI])
+            print("  + Distance from the mean: {}".format(dist))
+            pass
+    return (persons, confidences)
 def execute_main_loop():
     global ix, iy, ievent, master, templateName, rects, texts, curFrame, templates, faceFiles, exitCode, frame
     frame = None
@@ -201,7 +255,45 @@ if __name__ == "__main__":
     templateName = ''
     master = 0
     e = 0
+parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--dlibFacePredictor',
+        type=str,
+        help="Path to dlib's face predictor.",
+        default=os.path.join(
+            dlibModelDir,
+            "shape_predictor_68_face_landmarks.dat"))
+    parser.add_argument(
+        '--networkModel',
+        type=str,
+        help="Path to Torch network model.",
+        default=os.path.join(
+            openfaceModelDir,
+            'nn4.small2.v1.t7'))
+    parser.add_argument('--imgDim', type=int,
+                        help="Default image dimension.", default=96)
+    parser.add_argument(
+        '--captureDevice',
+        type=int,
+        default=0,
+        help='Capture device. 0 for latop webcam and 1 for usb webcam')
+    parser.add_argument('--width', type=int, default=320)
+    parser.add_argument('--height', type=int, default=240)
+    parser.add_argument('--threshold', type=float, default=0.5)
+    parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--verbose', action='store_true')
+    parser.add_argument(
+        'classifierModel',
+        type=str,
+        help='The Python pickle representing the classifier. This is NOT the Torch network model, which can be set with --networkModel.')
 
+    args = parser.parse_args()
+
+    align = openface.AlignDlib(args.dlibFacePredictor)
+    net = openface.TorchNeuralNet(
+        args.networkModel,
+        imgDim=args.imgDim,
+        cuda=args.cuda)
     #video feed source and windows
     video_capture = cv2.VideoCapture(0)
     cv2.namedWindow('Video')
