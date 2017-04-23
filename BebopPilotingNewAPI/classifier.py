@@ -28,7 +28,7 @@ import cv2
 import os
 import pickle
 
-from os.path import ispath, join
+from os.path import isdir, join
 
 from operator import itemgetter
 import numpy as np
@@ -51,8 +51,8 @@ workDir = "data/"
 classifierFile = "{}/classifier.pkl".format(workDir)
 imgDim = 96
 
-def train(args):
-    os.system("../batch-represent/main.lua -outDir data/ -data faces/")
+def train():
+    os.system("batch-represent/main.lua -outDir data/ -data faces/")
     images = "faces/"
     cuda = True
 
@@ -60,7 +60,7 @@ def train(args):
     net = openface.TorchNeuralNet(networkModel, imgDim=imgDim, cuda=cuda)
     print("Loading embeddings.")
     fname = "{}/labels.csv".format(workDir)
-    labels = [f for f in listdir(images) if isdir(join(os.path.realpath, f))]
+    labels = [f for f in os.listdir(images) if isdir(join(fileDir, f))]
     fname = "{}/reps.csv".format(workDir)
     embeddings = pd.read_csv(fname, header=None).as_matrix()
     le = LabelEncoder().fit(labels)
