@@ -45,10 +45,12 @@ openfaceModelDir = os.path.join(modelDir, 'openface')
 dlibFacePredictor = os.path.join(dlibModelDir,"shape_predictor_68_face_landmarks.dat")
 networkModel = os.path.join(openfaceModelDir,'nn4.small2.v1.t7')
 
+workDir = "data/"
+classifierFile = "{}/classifier.pkl".format(workDir)
 imgDim = 96
 
 def train(args):
-    workDir = "training/"
+    os.system("../batch-represent/main.lua -outDir data/ -data faces/")
     images = "faces/"
     cuda = True
 
@@ -69,7 +71,6 @@ def train(args):
     clf = SVC(C=1, kernel='linear', probability=True)
     clf.fit(embeddings, labelsNum)
 
-    fName = "{}/classifier.pkl".format(workDir)
-    print("Saving classifier to '{}'".format(fName))
-    with open(fName, 'w') as f:
+    print("Saving classifier to '{}'".format(classifierFile))
+    with open(classifierFile, 'w') as f:
         pickle.dump((le, clf), f)
