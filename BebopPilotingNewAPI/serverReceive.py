@@ -7,6 +7,7 @@ import pickle
 from subprocess import call
 import Tkinter as tk
 from constants import *
+import numpy as np
 
 exitCode = False
 notEnoughData = True
@@ -40,16 +41,14 @@ def connectPort(port):
 
 #Mouse callback function to get position and click event
 def get_mouse_position_onclick(event, ix, iy, flags, param):
-    global rects, curFrame, socketData
+    global rects, socketData, tempFrame
     if event == cv2.EVENT_LBUTTONDOWN:
         for idx, ((x,y),(x2,y2),_,__) in enumerate(rects):
             if (x < ix) and (x2> ix) and (y < iy) and (y2 > iy):
-                cv2.imshow('Recognized', curFrame[y:y2,x:x2])
+                cv2.imshow('Recognized', tempFrame[y:y2,x:x2])
                 ix, iy = -1, -1
                 create_new_text_window()
-                print pickle.dumps(templateName) +  boundary
-                print len(pickle.dumps(curFrame) +  boundary +  pickle.dumps(templateName) +  boundary)
-                socketData.send(pickle.dumps(cv2.resize(curFrame[y:y2,x:x2], (96, 96))) +  boundary +  pickle.dumps(templateName) +  boundary)
+                socketData.send(pickle.dumps(cv2.resize(tempFrame[y:y2,x:x2], (96, 96))) +  boundary +  pickle.dumps(templateName) +  boundary)
 
                 break
 def main():
@@ -93,10 +92,11 @@ def main():
                 continue
             if needsUpdating:
                 needsUpdating = False
-                curFrame = frame
+                curFrame = np.copy(frame)
 
             for rect in rects:
-                cv2.rectangle(frame,*(rect))
+                tempRect = [(rect[0][0]-2,rect[0][1]-2), (rect[1][0]+2,rect[1][1]+2)]+list(rect[2:])
+                cv2.rectangle(frame,*(tempRect))
 
             for text in texts:
                 cv2.putText(frame,*(text))
@@ -107,7 +107,7 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 def dataDataReceive():
-    global rects, texts,  socketData, needsUpdating
+    global rects, texts,  socketData, needsUpdating, tempFrame
     dataString = ""
     while not exitCode:
         dataData = socketData.recv(2**10)
@@ -118,6 +118,7 @@ def dataDataReceive():
             dataTemp = dataString[:ind+2]
             dataString = dataString[ind+2:]
             [rects, texts] = eval(dataTemp)#Technically kinda vulnerable, but the connection itself is secure
+            tempFrame = curFrame
 def dataVideoReceive():
     global notEnoughData,  socketVideo
     totalData = 0

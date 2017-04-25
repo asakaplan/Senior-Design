@@ -3,7 +3,7 @@ import sys
 import threading
 import cv2
 import time
-from os import listdir, mkfifo, remove, unlink, getcwd
+from os import listdir, mkfifo, remove, unlink, getcwd, mkdir
 from os.path import *
 import multiprocessing
 import numpy as np
@@ -14,16 +14,17 @@ from serverReceive import boundary
 from constants import *
 import Tkinter as tk
 from os import listdir
-from os.path import isfile, join, dirname, realpath, isdir
+from os.path import isfile, join, dirname, realpath, isdir, exists
 import glob
 import multiprocessing
 import threading
 import argparse
 import classifier
+from sklearn.mixture import GMM
 np.set_printoptions(precision=2)
 
 import openface
-
+threshold = .7
 videoSend = "videoOut.avi"
 videoReceive = "videoTemp.avi"
 faceDir = "faces"
@@ -120,7 +121,7 @@ def detect(frame):
     alignedFaces = []
 
     for box in bb:
-        rectsTemp.append(((box.left(),box.top()),(box.right(),box.bottom()), (255,255,255),1))
+        rectsTemp.append([(box.left(),box.top()),(box.right(),box.bottom()), (255,255,255),1])
         alignedFaces.append(
             align.align(
                 classifier.imgDim,
@@ -148,6 +149,11 @@ def detect(frame):
     print persons, confs
 
     possibleFaces = []
+    for i, (person, conf) in enumerate(zip(persons, confs)):
+        if conf>threshold:
+            rectsTemp[i][2]=(0,0,255)#Change detected face box to red
+            textTemp.append(("%s: %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (0,0,255),2,cv2.CV_AA))
+
     #
     # rectsTemp.append((fromCoord,toCoord, (0,0,255),1))
     # textTemp.append((faceFiles[predicted], fromCoord, cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.CV_AA))
@@ -156,7 +162,7 @@ def detect(frame):
         rects.pop()#clear the list
 
     for r in rectsTemp:
-        rects.append(r)
+        rects.append(tuple(r))
 
     while texts:
         texts.pop()#clear the list
@@ -277,11 +283,17 @@ def dataReceive():
 
                 #Process it
                 img = pickle.loads(firstPart)
-                fileName = pickle.loads(secondPart)
-                dirname, imagenum = fileName.split(" ")
-                if not os.path.exists(dirname):
-                    os.makedir(dirname)
-                cv2.imwrite('faces/' + dirname + '/' + imagenum + '.png', img)
+                dirname = pickle.loads(secondPart)
+                newDir =join("faces/", dirname)
+                if not exists(newDir):
+                    mkdir(newDir)
+
+                imgNum = 1
+                while exists(join(newDir,str(imgNum)+".png")):
+                    print("Already exists: "+join(newDir,str(imgNum)+".png"))
+                    imgNum+=1
+
+                cv2.imwrite(join(newDir, str(imgNum) + '.png'), img)
 
 
                 firstPart,secondPart = None, None

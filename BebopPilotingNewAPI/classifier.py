@@ -52,6 +52,7 @@ classifierFile = "{}/classifier.pkl".format(workDir)
 imgDim = 96
 
 def train():
+    os.remove("faces/cache.t7")
     os.system("batch-represent/main.lua -outDir data/ -data faces/")
     images = "faces/"
     cuda = True
@@ -60,7 +61,10 @@ def train():
     net = openface.TorchNeuralNet(networkModel, imgDim=imgDim, cuda=cuda)
     print("Loading embeddings.")
     fname = "{}/labels.csv".format(workDir)
-    labels = [f for f in os.listdir(images) if isdir(join(fileDir, f))]
+    labels = pd.read_csv(fname, header=None).as_matrix()[:, 1]
+    labels = map(itemgetter(1),
+                 map(os.path.split,
+                     map(os.path.dirname, labels)))  # Get the directory.
     fname = "{}/reps.csv".format(workDir)
     embeddings = pd.read_csv(fname, header=None).as_matrix()
     le = LabelEncoder().fit(labels)
@@ -68,6 +72,7 @@ def train():
     nClasses = len(le.classes_)
     print("Training for {} classes.".format(nClasses))
     clf = SVC(C=1, kernel='linear', probability=True)
+    print(len(embeddings),len(labelsNum))
     clf.fit(embeddings, labelsNum)
 
     print("Saving classifier to '{}'".format(classifierFile))
