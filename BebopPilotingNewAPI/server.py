@@ -65,7 +65,9 @@ def isValid(val):
 
 
 def detectLoop():
-    global frame
+    global frame, cf
+    cf = classifier.Classifier()
+
     while not exitCode:
         if frame is not None:
             print "Detecting"
@@ -74,7 +76,7 @@ def detectLoop():
         else:
             print "Waiting on frame"
 def detect(frame):
-    global recognizerMutex
+    global recognizerMutex, cf
     xTemp, yTemp = 0, 0
     rectsTemp, textTemp = [], []
 
@@ -107,11 +109,11 @@ def detect(frame):
         reps.append(net.forward(alignedFace))
 
     while recognizerMutex:
-        print "Waiting on mutex in detect"
+        #print "Waiting on mutex in detect"
         time.sleep(.5)
 
     recognizerMutex = True
-    persons, confs = classifier.infer(reps)
+    persons, confs = cf.infer(reps)
     recognizerMutex = False
 
     print persons, confs
@@ -175,12 +177,12 @@ def loadData():
     print faceFiles, templates
 
 def trainNetwork():
-    global recognizer, templates, faceFiles, recognizerMutex
+    global recognizer, templates, faceFiles, recognizerMutex, cf
     while recognizerMutex:
         print "Waiting on mutex in train"
         time.sleep(.5)
     recognizerMutex = True
-    classifier.train()
+    cf.train()
     recognizerMutex = False
 
 def main():
@@ -273,7 +275,7 @@ def dataReceive():
 
 
                 firstPart,secondPart = None, None
-                trainNetwork()
+                threading.Thread(target=trainNetwork).start()
 
     tempFile.close()
 

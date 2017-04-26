@@ -62,89 +62,90 @@ questionableThreshold = .7
 trainingRunning = False
 needsToRun = False
 
-def train():
-    global trainingRunning, needsToRun
-    if trainingRunning:
-        print "Deferring run"
-        needsToRun = True
-        return
-    trainingRunning = True
+class Classifier:
+    def __init__(self):
+        self.trainingRunning = False
+        self.needsToRun = False
+    def train(self):
+        if self.trainingRunning:
+            print "Deferring run"
+            self.needsToRun = True
+            return
+        self.trainingRunning = True
 
-    try:
-        os.remove("faces/cache.t7")
-    except:
-        pass
-    os.system("batch-represent/main.lua -outDir data/ -data faces/")
-    images = "faces/"
-    cuda = True
+        try:
+            os.remove("faces/cache.t7")
+        except:
+            pass
+        os.system("batch-represent/main.lua -outDir data/ -data faces/")
+        images = "faces/"
+        cuda = True
 
-    align = openface.AlignDlib(dlibFacePredictor)
-    net = openface.TorchNeuralNet(networkModel, imgDim=imgDim, cuda=cuda)
-    print("Loading embeddings.")
-    workDir="data/"
-    fname = "{}/labels.csv".format(workDir)
-    labels = pd.read_csv(fname, header=None).as_matrix()[:, 1]
-    labels = map(itemgetter(1),
-                 map(os.path.split,
-                     map(os.path.dirname, labels)))  # Get the directory.
-    fname = "{}/reps.csv".format(workDir)
-    embeddings = pd.read_csv(fname, header=None).as_matrix()
-    keyPairs = {}
-    for label, embedding in zip(labels, embeddings):
-        if label in keyPairs:
-            keyPairs[label].append(embedding)
-        else:
-            keyPairs[label]=[embedding]
+        align = openface.AlignDlib(dlibFacePredictor)
+        net = openface.TorchNeuralNet(networkModel, imgDim=imgDim, cuda=cuda)
+        workDir="data/"
+        fname = "{}/labels.csv".format(workDir)
+        labels = pd.read_csv(fname, header=None).as_matrix()[:, 1]
+        labels = map(itemgetter(1),
+                     map(os.path.split,
+                         map(os.path.dirname, labels)))  # Get the directory.
+        fname = "{}/reps.csv".format(workDir)
+        embeddings = pd.read_csv(fname, header=None).as_matrix()
+        keyPairs = {}
+        for label, embedding in zip(labels, embeddings):
+            if label in keyPairs:
+                keyPairs[label].append(embedding)
+            else:
+                keyPairs[label]=[embedding]
 
-    for i in range(1,1+ensembleSize):
-        subSample = {label:sample(embeddings,min(len(embeddings),minFacesPerPerson,int(round(sampleRatio*len(embeddings))))) for label, embeddings in keyPairs.items()}
-        labelsSample, embeddingsSample = [], []
-        for label, embeddings in subSample.items():
-            for embedding in embeddings:
-                labelsSample.append(label)
-                embeddingsSample.append(embedding)
+        for i in range(1,1+ensembleSize):
+            subSample = {label:sample(embeddings,min(len(embeddings),minFacesPerPerson,int(round(sampleRatio*len(embeddings))))) for label, embeddings in keyPairs.items()}
+            labelsSample, embeddingsSample = [], []
+            for label, embeddings in subSample.items():
+                for embedding in embeddings:
+                    labelsSample.append(label)
+                    embeddingsSample.append(embedding)
 
-        le = LabelEncoder().fit(labelsSample)
-        labelsNum = le.transform(labelsSample)
-        nClasses = len(le.classes_)
-        print("Training for {} classes.".format(nClasses))
-        clf = SVC(C=1, kernel='linear', probability=True)#GaussianNB()#(C=1, kernel='linear', probability=True)
-        print(len(embeddingsSample),len(labelsNum))
-        clf.fit(embeddingsSample, labelsNum)
+            le = LabelEncoder().fit(labelsSample)
+            labelsNum = le.transform(labelsSample)
+            nClasses = len(le.classes_)
+            clf = SVC(C=1, kernel='linear', probability=True)#GaussianNB()#(C=1, kernel='linear', probability=True)
+            clf.fit(embeddingsSample, labelsNum)
+            with open(classifierFile%i, 'w') as f:
+                pickle.dump((le, clf), f)
+        print "Setting trainingRunning to false", self.trainingRunning, self.needsToRun
+        self.trainingRunning = False
+        if self.needsToRun:
+            print "Rerunning train from defer"
+            train()
+            needsToRun=False
+    def infer(self, reps):
+        listOfResults = [{} for i in reps]
+        totalPredicted = [0 for i in reps]
+        for i in range(1,1+ensembleSize):
+            with open(classifierFile%i, 'r') as f:
+                (le, clf) = pickle.load(f)
 
-        print("Saving classifier to '{}'".format(classifierFile%i))
-        with open(classifierFile%i, 'w') as f:
-            pickle.dump((le, clf), f)
-    trainingRunning = False
-    if needsToRun:
-        print "Rerunning train from defer"
-        train()
-        needsToRun=False
-def infer(reps):
-    listOfResults = [{} for i in reps]
-    for i in range(1,1+ensembleSize):
-        with open(classifierFile%i, 'r') as f:
-            (le, clf) = pickle.load(f)
+            persons = []
+            confidences = []
 
-        persons = []
-        confidences = []
+            for ind, rep in enumerate(reps):
+                try:
+                    rep = rep.reshape(1, -1)
+                except:
+                    print "One of the detected faces is invalid"
+                    continue
+                predictions = clf.predict_proba(rep).ravel()
+                maxI = np.argmax(predictions)
+                name = le.inverse_transform(maxI)
+                if predictions[maxI]>1.0/(len(predictions)-1):
+                    listOfResults[ind][name] = 1+ listOfResults[ind].get(name,0)
+                    totalPredicted[ind]+=1
 
-        for ind, rep in enumerate(reps):
-            try:
-                rep = rep.reshape(1, -1)
-            except:
-                print "One of the detected faces is invalid"
-                continue
-            predictions = clf.predict_proba(rep).ravel()
-            maxI = np.argmax(predictions)
-            name = le.inverse_transform(maxI)
-            listOfResults[ind][name] = 1+ listOfResults[ind].get(name,0)
+        for i in range(len(reps)):
+            selected = max(listOfResults[i].items(),key=lambda a:a[1])
+            confidence = float(selected[1])/totalPredicted[i]
+            persons.append(selected[0])
+            confidences.append(confidence)
 
-    for i in range(len(reps)):
-        selected = max(listOfResults[i].items(),key=lambda a:a[1])
-        confidence = float(selected[1])/ensembleSize
-        persons.append(selected[0])
-        confidences.append(confidence)
-    print listOfResults
-
-    return (persons, confidences)
+        return (persons, confidences)

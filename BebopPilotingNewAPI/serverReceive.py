@@ -55,7 +55,7 @@ def get_mouse_position_onclick(event, ix, iy, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
         for idx, ((x,y),(x2,y2),_,__) in enumerate(rects):
             if (x < ix) and (x2> ix) and (y < iy) and (y2 > iy):
-                recFace = curFrame[y:y2,x:x2] #Or tempframe depending on what you're going for 
+                recFace = curFrame[y:y2,x:x2] #Or tempframe depending on what you're going for
                 cv2.namedWindow('Recognized')
                 cv2.imshow('Recognized', recFace)
                 ix, iy = -1, -1
@@ -100,9 +100,9 @@ def main():
             if not flag:
                 print("Frame not ready")
                 continue
-            if needsUpdating:
-                needsUpdating = False
-                curFrame = np.copy(frame)
+            curFrame = np.copy(frame)
+            #if needsUpdating:
+            #    needsUpdating = False
 
             for rect in rects:
                 tempRect = [(rect[0][0]-2,rect[0][1]-2), (rect[1][0]+2,rect[1][1]+2)]+list(rect[2:])
