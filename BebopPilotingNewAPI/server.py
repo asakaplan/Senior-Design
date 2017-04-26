@@ -63,29 +63,6 @@ def setupSocket(port):
 def isValid(val):
     return bool(val) and not isnan(val)
 
-def infer(reps):
-    with open(classifier.classifierFile, 'r') as f:
-        (le, clf) = pickle.load(f)
-
-    persons = []
-    confidences = []
-
-    for rep in reps:
-        try:
-            rep = rep.reshape(1, -1)
-        except:
-            print "No Face detected"
-            return (None, None)
-        start = time.time()
-        predictions = clf.predict_proba(rep).ravel()
-        maxI = np.argmax(predictions)
-        persons.append(le.inverse_transform(maxI))
-        confidences.append(predictions[maxI])
-        if isinstance(clf, GMM):
-            dist = np.linalg.norm(rep - clf.means_[maxI])
-            print("  + Distance from the mean: {}".format(dist))
-            pass
-    return (persons, confidences)
 
 def detectLoop():
     global frame
@@ -99,16 +76,7 @@ def detectLoop():
 def detect(frame):
     global recognizerMutex
     xTemp, yTemp = 0, 0
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     rectsTemp, textTemp = [], []
-
-    faces = faceCascade.detectMultiScale(
-        gray,
-        scaleFactor=1.3,
-        minNeighbors=3,
-        minSize=(30, 30),
-        flags=cv2.CASCADE_SCALE_IMAGE
-    )
 
     rgbImg = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -140,19 +108,27 @@ def detect(frame):
 
     while recognizerMutex:
         print "Waiting on mutex in detect"
-        time.sleep(.05)
+        time.sleep(.5)
 
     recognizerMutex = True
-    persons, confs = infer(reps)
+    persons, confs = classifier.infer(reps)
     recognizerMutex = False
 
     print persons, confs
 
     possibleFaces = []
     for i, (person, conf) in enumerate(zip(persons, confs)):
-        if conf>threshold:
-            rectsTemp[i][2]=(0,0,255)#Change detected face box to red
-            textTemp.append(("%s: %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (0,0,255),2,cv2.CV_AA))
+        if "unknown" not in person:
+            if conf>classifier.questionableThreshold:
+                rectsTemp[i][2]=(0,0,255)#Change detected face box to red
+                textTemp.append(("%s: %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (0,0,255),2,cv2.CV_AA))
+            elif conf<classifier.unknownThreshold:
+                rectsTemp[i][2]=(255,255,255)#Change detected face box to red
+                textTemp.append(("(Unknown %s): %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,255,255),2,cv2.CV_AA))
+            else:
+                textTemp.append(("(Questionable %s): %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,255,0),2,cv2.CV_AA))
+        else:
+            textTemp.append(("(Very unknown)",(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,255,0),2,cv2.CV_AA))
 
     #
     # rectsTemp.append((fromCoord,toCoord, (0,0,255),1))
@@ -202,7 +178,7 @@ def trainNetwork():
     global recognizer, templates, faceFiles, recognizerMutex
     while recognizerMutex:
         print "Waiting on mutex in train"
-        time.sleep(.05)
+        time.sleep(.5)
     recognizerMutex = True
     classifier.train()
     recognizerMutex = False
@@ -247,11 +223,11 @@ def main():
     sourceDimensions = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
     print("FOURCC:",cap.get(cv2.cv.CV_CAP_PROP_FOURCC))
     loadData()
-    trainNetwork()
 
     threading.Thread(target=detectLoop).start()
+    threading.Thread(target=trainNetwork).start()
 
-    while True:
+    while not exitCode:
         flag, frameTemp = cap.read()
         if flag:
             frame = frameTemp

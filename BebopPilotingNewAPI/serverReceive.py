@@ -8,15 +8,19 @@ from subprocess import call
 import Tkinter as tk
 from constants import *
 import numpy as np
-
+from concurrent.futures import ThreadPoolExecutor
+executor = ThreadPoolExecutor(max_workers=1)
 exitCode = False
 notEnoughData = True
 needsUpdating = True
 #This simply returns and destroys the text box window
-def get_window_text():
-    global templateName,  e,  master
+def get_window_text(_=None):
+    global master
     templateName = e.get()
+    socketData.send(pickle.dumps(cv2.resize(recFace, (96, 96))) +  boundary +  pickle.dumps(templateName) +  boundary)
+    cv2.destroyWindow("Recognized")
     master.destroy()
+    master.quit()
 def isValid(val):
     return bool(val) and val!=float("nan")
 
@@ -30,6 +34,12 @@ def create_new_text_window():
     e.focus_set()
     b = tk.Button(master, text="That'll do!", width=10, command=get_window_text)
     b.pack()
+    def destroyWindow():
+        cv2.destroyWindow("Recognized")
+        master.quit()
+    master.protocol("WM_DELETE_WINDOW", destroyWindow)
+
+    master.bind('<Return>', get_window_text)
     master.mainloop()
 
 def connectPort(port):
@@ -41,15 +51,16 @@ def connectPort(port):
 
 #Mouse callback function to get position and click event
 def get_mouse_position_onclick(event, ix, iy, flags, param):
-    global rects, socketData, tempFrame
+    global rects, socketData, tempFrame, recFace, curFrame
     if event == cv2.EVENT_LBUTTONDOWN:
         for idx, ((x,y),(x2,y2),_,__) in enumerate(rects):
             if (x < ix) and (x2> ix) and (y < iy) and (y2 > iy):
-                cv2.imshow('Recognized', tempFrame[y:y2,x:x2])
+                recFace = curFrame[y:y2,x:x2] #Or tempframe depending on what you're going for 
+                cv2.namedWindow('Recognized')
+                cv2.imshow('Recognized', recFace)
                 ix, iy = -1, -1
-                create_new_text_window()
-                socketData.send(pickle.dumps(cv2.resize(tempFrame[y:y2,x:x2], (96, 96))) +  boundary +  pickle.dumps(templateName) +  boundary)
-
+                #create_new_text_window()
+                executor.submit(create_new_text_window)
                 break
 def main():
         try:
@@ -66,7 +77,6 @@ def main():
         rects = []
         texts = []
         cv2.namedWindow('Video')
-        cv2.namedWindow('Recognized')
 
         cv2.setMouseCallback('Video', get_mouse_position_onclick)
         os.mkfifo(videoReceive)
