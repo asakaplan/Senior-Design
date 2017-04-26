@@ -32,7 +32,7 @@ exitCode = False
 notEnoughData = True
 faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
-recognizerMutex = False
+recognizerMutex = []
 fileDir = dirname(realpath(__file__))
 modelDir = join(fileDir, 'models')
 dlibModelDir = join(modelDir, 'dlib')
@@ -112,9 +112,8 @@ def detect(frame):
         #print "Waiting on mutex in detect"
         time.sleep(.5)
 
-    recognizerMutex = True
-    persons, confs = cf.infer(reps)
-    recognizerMutex = False
+    persons, confs = cf.infer(reps,recognizerMutex)
+    recognizerMutex = []
 
     print persons, confs
 
@@ -181,9 +180,7 @@ def trainNetwork():
     while recognizerMutex:
         print "Waiting on mutex in train"
         time.sleep(.5)
-    recognizerMutex = True
-    cf.train()
-    recognizerMutex = False
+    cf.train(recognizerMutex)
 
 def main():
     global rects, texts, templates, faceFiles, frame

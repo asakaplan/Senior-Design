@@ -66,7 +66,7 @@ class Classifier:
     def __init__(self):
         self.trainingRunning = False
         self.needsToRun = False
-    def train(self):
+    def train(self, recognizerMutex):
         if self.trainingRunning:
             print "Deferring run"
             self.needsToRun = True
@@ -111,21 +111,24 @@ class Classifier:
             nClasses = len(le.classes_)
             clf = SVC(C=1, kernel='linear', probability=True)#GaussianNB()#(C=1, kernel='linear', probability=True)
             clf.fit(embeddingsSample, labelsNum)
+            recognizerMutex.append(" ")
             with open(classifierFile%i, 'w') as f:
                 pickle.dump((le, clf), f)
+            recognizerMutex.pop()
         print "Setting trainingRunning to false", self.trainingRunning, self.needsToRun
         self.trainingRunning = False
         if self.needsToRun:
             print "Rerunning train from defer"
             train()
             needsToRun=False
-    def infer(self, reps):
+    def infer(self, reps, recognizerMutex):
         listOfResults = [{} for i in reps]
         totalPredicted = [0 for i in reps]
         for i in range(1,1+ensembleSize):
+            recognizerMutex.append(" ")
             with open(classifierFile%i, 'r') as f:
                 (le, clf) = pickle.load(f)
-
+            recognizerMutex.pop()
             persons = []
             confidences = []
 
