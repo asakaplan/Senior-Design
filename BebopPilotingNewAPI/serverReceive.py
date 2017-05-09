@@ -9,23 +9,21 @@ import Tkinter as tk
 from constants import *
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
+from server import isValid
 executor = ThreadPoolExecutor(max_workers=1)
 exitCode = False
 notEnoughData = True
 needsUpdating = True
-#This simply returns and destroys the text box window
 def get_window_text(_=None):
+    """Callback function for receiving text information from user box"""
     global master
     templateName = e.get()
-    socketData.send(pickle.dumps(cv2.resize(recFace, (96, 96))) +  boundary +  pickle.dumps(templateName) +  boundary)
+    socketData.send(pickle.dumps(recFace) +  boundary +  pickle.dumps(templateName) +  boundary)
     cv2.destroyWindow("Recognized")
     master.destroy()
-    master.quit()
-def isValid(val):
-    return bool(val) and val!=float("nan")
 
-#Freezes current process to enter text for clicked image
 def create_new_text_window():
+    """Creates a text window and image window as a user prompt"""
     global master
     global e
     master = tk.Tk()
@@ -43,20 +41,24 @@ def create_new_text_window():
     master.mainloop()
 
 def connectPort(port):
+    """Connects to a local port for write. To connect to an external port, use
+    port forwarding (e.g. ssh -R)"""
+
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     print("Attempting connection with port %d"%port)
     soc.connect(("127.0.0.1",port))
     #print('Connected with out ' + addr[0] + ":" + str(addr[1]))
     return soc
 
-#Mouse callback function to get position and click event
 def get_mouse_position_onclick(event, ix, iy, flags, param):
+    """Callback for the video stream, connecting clicks to their corresponding
+    faces on the video"""
     global rects, socketData, tempFrame, recFace, curFrame
     if event == cv2.EVENT_LBUTTONDOWN:
         for idx, ((x,y),(x2,y2),_,__) in enumerate(rects):
             if (x < ix) and (x2> ix) and (y < iy) and (y2 > iy):
-                recFace = curFrame[y:y2,x:x2] #Or tempframe depending on what you're going for
-                cv2.namedWindow('Recognized')
+                recFace = tempFrame[y-30:y2+30,x-30:x2+30] #Or tempframe depending on what you're going for
+                cv2.namedWindow('Recognized', cv2.WINDOW_NORMAL)
                 cv2.imshow('Recognized', recFace)
                 ix, iy = -1, -1
                 #create_new_text_window()
@@ -76,7 +78,7 @@ def main():
         global ix, iy, ievent, master, templateName, rects, texts, curFrame, templates, faceFiles, curFrame, needsUpdating
         rects = []
         texts = []
-        cv2.namedWindow('Video')
+        cv2.namedWindow('Video', cv2.WINDOW_NORMAL)
 
         cv2.setMouseCallback('Video', get_mouse_position_onclick)
         os.mkfifo(videoReceive)
@@ -117,6 +119,9 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 def dataDataReceive():
+    """Receives face recognition information from socket connection and updates
+    global variables rects and temps accordingly. Caches the current frame to
+    tempFrame so that rects and texts correspond properly to a frame"""
     global rects, texts,  socketData, needsUpdating, tempFrame
     dataString = ""
     while not exitCode:
@@ -129,11 +134,12 @@ def dataDataReceive():
             dataString = dataString[ind+2:]
             [rects, texts] = eval(dataTemp)#Technically kinda vulnerable, but the connection itself is secure
             tempFrame = curFrame
+
 def dataVideoReceive():
-    global notEnoughData,  socketVideo
+    """Receives video information from socket and outputs it to tempFile pipe"""
+    global socketVideo
     totalData = 0
     tempFile = open(videoReceive, "w+b")
-
 
     while not exitCode:
         dataVideo = socketVideo.recv(2**15)

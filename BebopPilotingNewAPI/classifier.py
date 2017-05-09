@@ -19,6 +19,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Modified significantly from source
+
 import time
 
 start = time.time()
@@ -54,7 +56,6 @@ classifierFile = "{}/classifier_%02d.pkl".format(workDir)
 imgDim = 96
 
 #Decision forest parameters
-ensembleSize = 60
 sampleRatio = .7
 minFacesPerPerson = 5
 unknownThreshold  = .5
@@ -63,10 +64,16 @@ trainingRunning = False
 needsToRun = False
 
 class Classifier:
-    def __init__(self):
+
+    def __init__(self, ensembleSize = 30):
         self.trainingRunning = False
         self.needsToRun = False
+        self.ensembleSize = ensembleSize
+
     def train(self, recognizerMutex):
+        """Queues an ensemble classifier train process, locking/using the mutex
+           during saving"""
+
         if self.trainingRunning:
             print "Deferring run"
             self.needsToRun = True
@@ -98,7 +105,7 @@ class Classifier:
             else:
                 keyPairs[label]=[embedding]
 
-        for i in range(1,1+ensembleSize):
+        for i in range(1,1+self.ensembleSize):
             subSample = {label:sample(embeddings,min(len(embeddings),minFacesPerPerson,int(round(sampleRatio*len(embeddings))))) for label, embeddings in keyPairs.items()}
             labelsSample, embeddingsSample = [], []
             for label, embeddings in subSample.items():
@@ -119,15 +126,24 @@ class Classifier:
         self.trainingRunning = False
         if self.needsToRun:
             print "Rerunning train from defer"
-            train()
+            self.train(recognizerMutex)
             needsToRun=False
     def infer(self, reps, recognizerMutex):
+        """
+        Identifies faces in reps with accuracy ratings. Returns the found faces
+        with indices corresponding and with the confidences corresponding to the
+        faces.
+        """
         listOfResults = [{} for i in reps]
         totalPredicted = [0 for i in reps]
-        for i in range(1,1+ensembleSize):
+        for i in range(1,1+self.ensembleSize):
             recognizerMutex.append(" ")
-            with open(classifierFile%i, 'r') as f:
-                (le, clf) = pickle.load(f)
+            try:
+                with open(classifierFile%i, 'r') as f:
+                    (le, clf) = pickle.load(f)
+            except Exception:
+                self.ensembleSize-=1
+                continue
             recognizerMutex.pop()
             persons = []
             confidences = []
@@ -141,13 +157,15 @@ class Classifier:
                 predictions = clf.predict_proba(rep).ravel()
                 maxI = np.argmax(predictions)
                 name = le.inverse_transform(maxI)
-                if predictions[maxI]>1.0/(len(predictions)-1):
-                    listOfResults[ind][name] = 1+ listOfResults[ind].get(name,0)
-                    totalPredicted[ind]+=1
 
+                print predictions[maxI],
+                #if predictions[maxI]>1.0/(len(predictions)-1):
+                listOfResults[ind][name] = 1+ listOfResults[ind].get(name,0)
+                totalPredicted[ind]+=1
+        print ""
         for i in range(len(reps)):
             selected = max(listOfResults[i].items(),key=lambda a:a[1])
-            confidence = float(selected[1])/totalPredicted[i]
+            confidence = float(selected[1])/max(1,totalPredicted[i])#Prevent 0/0 in bad classifier case
             persons.append(selected[0])
             confidences.append(confidence)
 

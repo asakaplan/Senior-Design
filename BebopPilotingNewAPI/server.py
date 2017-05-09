@@ -21,6 +21,7 @@ import threading
 import argparse
 import classifier
 from sklearn.mixture import GMM
+import alignimage
 np.set_printoptions(precision=2)
 
 import openface
@@ -41,10 +42,12 @@ openfaceModelDir = join(modelDir, 'openface')
 align = openface.AlignDlib(classifier.dlibFacePredictor)
 net = openface.TorchNeuralNet(classifier.networkModel, classifier.imgDim)
 
-faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
 
 def setupSocket(port):
+    """Starts a process to listen for a socket connection on port number
+       'port', with blocking. Returns the socket and connection when a
+       connection is established"""
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
     print( 'Socket created')
@@ -61,21 +64,27 @@ def setupSocket(port):
     return soc, conn
 
 def isValid(val):
+    """Returns true if the argument has a boolean function of True and when
+    the value is not nan"""
     return bool(val) and not isnan(val)
 
 
 def detectLoop():
+    """Synchronous loop that continually runs detect when a frame is available"""
     global frame, cf
     cf = classifier.Classifier()
 
     while not exitCode:
         if frame is not None:
-            print "Detecting"
             detect(frame)
             connData.send(str([list(rects), list(texts)]))
         else:
             print "Waiting on frame"
+
 def detect(frame):
+    """Detects and names faces in the given frame, outputting to the global
+    variables rects and texts"""
+
     global recognizerMutex, cf
     xTemp, yTemp = 0, 0
     rectsTemp, textTemp = [], []
@@ -125,15 +134,11 @@ def detect(frame):
                 textTemp.append(("%s: %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (0,0,255),2,cv2.CV_AA))
             elif conf<classifier.unknownThreshold:
                 rectsTemp[i][2]=(255,255,255)#Change detected face box to red
-                textTemp.append(("(Unknown %s): %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,255,255),2,cv2.CV_AA))
+                textTemp.append(("(Very Unknown): %.2f"%conf,(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,255,255),2,cv2.CV_AA))
             else:
                 textTemp.append(("(Questionable %s): %.2f"%(person,conf),(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,255,0),2,cv2.CV_AA))
         else:
             textTemp.append(("(Very unknown)",(rectsTemp[i][0][0],rectsTemp[i][1][1]+20), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,255,0),2,cv2.CV_AA))
-
-    #
-    # rectsTemp.append((fromCoord,toCoord, (0,0,255),1))
-    # textTemp.append((faceFiles[predicted], fromCoord, cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2, cv2.CV_AA))
 
     while rects:
         rects.pop()#clear the list
@@ -148,6 +153,8 @@ def detect(frame):
         texts.append(t)
 
 def setupFiles():
+    """Creates the needed fifo files and sets them to have a larger buffer size
+    via a perl call"""
     try:
        remove(videoSend)
     except Exception:
@@ -163,20 +170,9 @@ def setupFiles():
     call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoSend)], shell=True)
     call(["perl -MFcntl -e 'fcntl(STDIN, 1031, 524288) or die $!' <> %s"%join(cwd,videoReceive)], shell=True)
 
-def loadData():
-    global faceFiles, templates
-
-    faceFiles = [f for f in listdir(faceDir) if isfile(join(faceDir, f))]
-    templates = [cv2.imread(join(faceDir, face), 0) for face in faceFiles]
-
-    for i in range(len(faceFiles)-1,-1,-1):
-        if templates[i]==None or not templates[i].size:
-            templates.pop(i)
-            faceFiles.pop(i)
-    print faceFiles, templates
-
 def trainNetwork():
-    global recognizer, templates, faceFiles, recognizerMutex, cf
+    """Trains the neural network as soon as it is available, based on the mutex"""
+    global recognizerMutex, cf
     while recognizerMutex:
         print "Waiting on mutex in train"
         time.sleep(.5)
@@ -204,7 +200,6 @@ def main():
 
 
     threading.Thread(target=videoDataReceive).start()
-    threading.Thread(target=videoDataSend).start()
     threading.Thread(target=dataReceive).start()
 
     global cap
@@ -221,7 +216,6 @@ def main():
     sourceFPS = 30
     sourceDimensions = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
     print("FOURCC:",cap.get(cv2.cv.CV_CAP_PROP_FOURCC))
-    loadData()
 
     threading.Thread(target=detectLoop).start()
     threading.Thread(target=trainNetwork).start()
@@ -239,6 +233,7 @@ def main():
             break
 
 def dataReceive():
+    """Receives click data from the data socket connection"""
     tempBuffer = ""
     firstPart, secondPart = None, None
     while not exitCode:
@@ -265,10 +260,8 @@ def dataReceive():
 
                 imgNum = 1
                 while exists(join(newDir,str(imgNum)+".png")):
-                    print("Already exists: "+join(newDir,str(imgNum)+".png"))
                     imgNum+=1
-
-                cv2.imwrite(join(newDir, str(imgNum) + '.png'), img)
+                alignimage.align(img, join(newDir, str(imgNum) + '.png'))
 
 
                 firstPart,secondPart = None, None
@@ -277,30 +270,14 @@ def dataReceive():
     tempFile.close()
 
 def videoDataReceive():
+    """Receives video stream from socket connection and outputs it to tempFile
+    pipe. Also sends video directly back to the video connection socket"""
     tempFile = open(videoReceive,"wb")
     while not exitCode:
         data = conn.recv(2**15)
         tempFile.write(data)
         connVideo.send(data)
     tempFile.close()
-
-def videoDataSend():
-    lastLength = 0
-    outp = None
-    while not exitCode:
-        print("Trying to open output file")
-        try:
-            outp = open(videoSend, "r+b")
-            break
-        except Exception as e:
-            time.sleep(.1)
-
-    for line in outp:
-        #print("Sending data")
-        #outp is a fifo, so this will continue to go until the program is exited
-        if exitCode:break
-        connVideo.send(line)
-
 
 if __name__ == '__main__':
     try:

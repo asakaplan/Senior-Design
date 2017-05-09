@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Modified significantly from source
+
 import argparse
 import cv2
 import numpy as np
@@ -61,12 +63,3 @@ def align(img, path):
             print("  + Writing aligned file to disk.")
         outBgr = cv2.cvtColor(outRgb, cv2.COLOR_RGB2BGR)
         cv2.imwrite(imgName, outBgr)
-
-
-if __name__ == '__main__':
-
-
-    if args.mode == 'computeMean':
-        computeMeanMain(args)
-    else:
-        alignMain(args)

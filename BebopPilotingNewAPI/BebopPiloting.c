@@ -39,6 +39,9 @@ SUCH DAMAGE.
 *             include file :
 *
 *****************************************/
+
+//Modified to add socket connections and remove mplayer and start automated flight
+
 #include <stdlib.h>
 #include <curses.h>
 #include <string.h>
@@ -441,6 +444,7 @@ int main (int argc, char *argv[])
   return EXIT_SUCCESS;
 }
 
+//Sets up socket connection on port 8080 for connection with the server
 void setupSocket()
 {
   int portno;
@@ -466,6 +470,7 @@ void setupSocket()
 
 }
 
+//Writes to the created socket
 void writeSocket(uint8_t* data, int length){
 
   int n = write(sockfd,data, length);
