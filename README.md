@@ -51,7 +51,7 @@ Note: The more faces you add of the person, the more accurate the recognition wi
 ![Unrecognized Face](https://raw.githubusercontent.com/asakaplan/Senior-Design/master/images/image5.png)
 
 
-[VCU sponsored](https://raw.githubusercontent.com/asakaplan/Senior-Design/master/images/image1.png)
+![VCU sponsored](https://raw.githubusercontent.com/asakaplan/Senior-Design/master/images/image1.png)
 ### Team Members
 Asa Kaplan
 
